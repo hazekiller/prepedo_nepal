@@ -1,9 +1,29 @@
 // app/config/_env.js
+// React Native / Expo environment configuration
 
-// React Native environment variables
-export const ENV = {
-  API_BASE_URL: __DEV__
-    ? 'http://192.168.1.68:5000' // Use your PC LAN IP for Expo LAN
-    : 'https://saalik-api.prepedo.com', // Production
-  NODE_ENV: __DEV__ ? 'development' : 'production'
+// Ensure process.env is defined (important for web builds)
+const getEnvVariable = (key, fallback) => {
+  if (typeof process !== 'undefined' && process.env[key]) {
+    return process.env[key];
+  }
+  return fallback;
 };
+
+const ENV = {
+  // Base API URL
+  API_BASE_URL: getEnvVariable(
+    'EXPO_PUBLIC_API_URL',
+    'http://192.168.1.68:5000'
+  ),
+
+  // Socket URL for real-time connections
+  SOCKET_URL: getEnvVariable(
+    'EXPO_PUBLIC_SOCKET_URL',
+    'http://192.168.1.68:5000'
+  ),
+
+  // Node environment mode
+  NODE_ENV: typeof __DEV__ !== 'undefined' && __DEV__ ? 'development' : 'production',
+};
+
+export default ENV;

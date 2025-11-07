@@ -1,26 +1,55 @@
-// backend/server.js
+// prepedo_backend/server.js - Updated with Socket.io
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { testConnection, initializeDatabase } = require('./config/database');
+const SocketHandler = require('./socket/socketHandler');
 
 // Load environment variables
 dotenv.config();
 
 // Initialize express app
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'http://localhost:8081',
+      'http://192.168.1.68:8081',
+      'http://localhost:19006',
+      'exp://192.168.1.68:19000',
+      'exp://192.168.1.68:8081',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+});
+
+// Initialize Socket Handler
+const socketHandler = new SocketHandler(io);
+
+// Make io and socketHandler available to routes
+app.set('io', io);
+app.set('socketHandler', socketHandler);
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure CORS for LAN + localhost + Expo Go
+// Configure CORS for HTTP requests
 app.use(cors({
   origin: [
-    'http://localhost:8081',       // Web
-    'http://192.168.1.68:8081',   // Web LAN
-    'http://localhost:19006',     // Expo Web
-    'exp://192.168.1.68:19000',   // Expo Go physical device LAN
+    'http://localhost:8081',
+    'http://192.168.1.68:8081',
+    'http://localhost:19006',
+    'exp://192.168.1.68:19000',
   ],
   credentials: true
 }));
@@ -37,7 +66,23 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Prepedo Nepal API Server',
     version: '1.0.0',
-    status: 'Running'
+    status: 'Running',
+    socket: {
+      connected: socketHandler.getConnectedUsersCount(),
+      onlineDrivers: socketHandler.getOnlineDriversCount(),
+    }
+  });
+});
+
+// Socket.io health check
+app.get('/api/socket/health', (req, res) => {
+  res.json({
+    success: true,
+    socket: {
+      status: 'running',
+      connectedUsers: socketHandler.getConnectedUsersCount(),
+      onlineDrivers: socketHandler.getOnlineDriversCount(),
+    }
   });
 });
 
@@ -77,18 +122,45 @@ const startServer = async () => {
 
     await initializeDatabase();
 
-    app.listen(PORT, () => {
-      console.log('🚀 Prepedo Nepal Backend Server Started!');
-      console.log(`📡 Running on port: ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 API URL: http://192.168.1.68:${PORT}`);
-      console.log('📚 Health Check: http://192.168.1.68:' + PORT + '/');
+    server.listen(PORT, () => {
+      console.log('\n' + '='.repeat(60));
+      console.log('🚀 PREPEDO NEPAL - BACKEND SERVER STARTED!');
+      console.log('='.repeat(60));
+      console.log(`📡 HTTP Server:    http://192.168.1.68:${PORT}`);
+      console.log(`⚡ Socket.io:      ws://192.168.1.68:${PORT}`);
+      console.log(`🌍 Environment:    ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📊 Database:       Connected`);
+      console.log('='.repeat(60));
+      console.log('📚 Available Endpoints:');
+      console.log(`   Health:         GET  http://192.168.1.68:${PORT}/`);
+      console.log(`   Socket Health:  GET  http://192.168.1.68:${PORT}/api/socket/health`);
+      console.log(`   Auth:           POST http://192.168.1.68:${PORT}/api/auth/login`);
+      console.log(`   Bookings:       POST http://192.168.1.68:${PORT}/api/bookings`);
+      console.log('='.repeat(60));
+      console.log('✅ Server is ready to accept connections!\n');
     });
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);
   }
 };
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\nSIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
 
 process.on('unhandledRejection', err => {
   console.error('Unhandled Promise Rejection:', err);
@@ -102,4 +174,4 @@ process.on('uncaughtException', err => {
 
 startServer();
 
-module.exports = app;
+module.exports = { app, server, io, socketHandler };

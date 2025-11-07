@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
-import { COLORS } from './config/colors';
+import COLORS  from './config/colors';
 import authService from './services/authService';
 
 export default function IndexScreen() {

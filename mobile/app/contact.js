@@ -1,191 +1,153 @@
-// app/contact.js - Prepedo Nepal
+// app/contact.js
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from './config/colors';
+import COLORS  from './config/colors';
 
 export default function ContactScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
-    // Handle form submission
-    console.log('Contact form submitted', { name, email, message });
-    alert('Thank you for contacting us! We will respond shortly.');
-  };
+  const handleSubmit = async () => {
+    if (!name || !email || !subject || !message) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
 
-  const handlePhone = () => {
-    Linking.openURL('tel:+977 970-3350007');
-  };
-
-  const handleEmail = () => {
-    Linking.openURL('mailto:info@prepedo.com.np');
-  };
-
-  const handleWhatsApp = () => {
-    Linking.openURL('https://wa.me/9779703350007');
+    setLoading(true);
+    
+    // Simulate sending message
+    setTimeout(() => {
+      Alert.alert(
+        'Success',
+        'Thank you for contacting us! We will get back to you shortly.',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+      setLoading(false);
+    }, 1500);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Contact Us</Text>
-        <View style={styles.placeholder} />
+        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <View style={styles.heroSection}>
-          <Ionicons name="chatbubbles" size={64} color={COLORS.primary} />
-          <Text style={styles.heroTitle}>Get In Touch</Text>
-          <Text style={styles.heroSubtitle}>
-            We're here to assist you 24/7
+        <View style={styles.content}>
+          <Text style={styles.title}>Get In Touch</Text>
+          <Text style={styles.subtitle}>
+            Have questions? We'd love to hear from you. Send us a message and we'll respond as
+            soon as possible.
           </Text>
-        </View>
 
-        {/* Contact Methods */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact Methods</Text>
-          
-          <TouchableOpacity style={styles.contactCard} onPress={handlePhone}>
-            <LinearGradient
-              colors={['rgba(212,175,55,0.1)', 'rgba(212,175,55,0.05)']}
-              style={styles.contactGradient}
-            >
-              <View style={styles.contactIcon}>
-                <Ionicons name="call" size={28} color={COLORS.primary} />
+          <View style={styles.contactInfoSection}>
+            <View style={styles.contactInfoCard}>
+              <Ionicons name="mail" size={24} color={COLORS.primary} />
+              <View style={styles.contactInfoContent}>
+                <Text style={styles.contactInfoLabel}>Email</Text>
+                <Text style={styles.contactInfoText}>info@prepedonepal.com</Text>
               </View>
-              <View style={styles.contactContent}>
-                <Text style={styles.contactTitle}>Phone</Text>
-                <Text style={styles.contactText}>+977 970-3350007</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
-            </LinearGradient>
-          </TouchableOpacity>
+            </View>
 
-          <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
-            <LinearGradient
-              colors={['rgba(212,175,55,0.1)', 'rgba(212,175,55,0.05)']}
-              style={styles.contactGradient}
-            >
-              <View style={styles.contactIcon}>
-                <Ionicons name="mail" size={28} color={COLORS.primary} />
+            <View style={styles.contactInfoCard}>
+              <Ionicons name="call" size={24} color={COLORS.primary} />
+              <View style={styles.contactInfoContent}>
+                <Text style={styles.contactInfoLabel}>Phone</Text>
+                <Text style={styles.contactInfoText}>+977 980-1234567</Text>
               </View>
-              <View style={styles.contactContent}>
-                <Text style={styles.contactTitle}>Email</Text>
-                <Text style={styles.contactText}>info@prepedo.com.np</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
-            </LinearGradient>
-          </TouchableOpacity>
+            </View>
 
-          <TouchableOpacity style={styles.contactCard} onPress={handleWhatsApp}>
-            <LinearGradient
-              colors={['rgba(212,175,55,0.1)', 'rgba(212,175,55,0.05)']}
-              style={styles.contactGradient}
-            >
-              <View style={styles.contactIcon}>
-                <Ionicons name="logo-whatsapp" size={28} color={COLORS.primary} />
+            <View style={styles.contactInfoCard}>
+              <Ionicons name="location" size={24} color={COLORS.primary} />
+              <View style={styles.contactInfoContent}>
+                <Text style={styles.contactInfoLabel}>Address</Text>
+                <Text style={styles.contactInfoText}>Kathmandu, Nepal</Text>
               </View>
-              <View style={styles.contactContent}>
-                <Text style={styles.contactTitle}>WhatsApp</Text>
-                <Text style={styles.contactText}>Chat with us instantly</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+            </View>
+          </View>
 
-        {/* Contact Form */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Send Message</Text>
-          
+          <Text style={styles.formTitle}>Send us a Message</Text>
+
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your name"
-                placeholderTextColor={COLORS.textMuted}
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
+            <Text style={styles.label}>Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Your full name"
+              placeholderTextColor={COLORS.textMuted}
+              value={name}
+              onChangeText={setName}
+            />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="your@email.com"
-                placeholderTextColor={COLORS.textMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+            <Text style={styles.label}>Email *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="your.email@example.com"
+              placeholderTextColor={COLORS.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Message</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="How can we help you?"
-                placeholderTextColor={COLORS.textMuted}
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                numberOfLines={5}
-                textAlignVertical="top"
-              />
-            </View>
+            <Text style={styles.label}>Subject *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="What is this about?"
+              placeholderTextColor={COLORS.textMuted}
+              value={subject}
+              onChangeText={setSubject}
+            />
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <Text style={styles.label}>Message *</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Your message..."
+              placeholderTextColor={COLORS.textMuted}
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              numberOfLines={6}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
               <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
+                colors={loading ? ['#555', '#666'] : [COLORS.primary, '#FFD700']}
                 style={styles.submitGradient}
               >
-                <Text style={styles.submitText}>Send Message</Text>
+                <Text style={styles.submitText}>
+                  {loading ? 'Sending...' : 'Send Message'}
+                </Text>
                 <Ionicons name="send" size={20} color="#000" />
               </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Office Location */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Office Location</Text>
-          <View style={styles.locationCard}>
-            <View style={styles.locationIcon}>
-              <Ionicons name="location" size={32} color={COLORS.primary} />
-            </View>
-            <View style={styles.locationContent}>
-              <Text style={styles.locationTitle}>Prepedo Nepal HQ</Text>
-              <Text style={styles.locationText}>
-                Kathmandu{'\n'}
-                Nepal - 44600
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.hoursCard}>
-            <Ionicons name="time" size={24} color={COLORS.primary} />
-            <View style={styles.hoursContent}>
-              <Text style={styles.hoursTitle}>Business Hours</Text>
-              <Text style={styles.hoursText}>24/7 Service Available</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -198,181 +160,105 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    padding: 20,
+    paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-  },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
-  },
-  placeholder: {
-    width: 40,
   },
   scrollView: {
     flex: 1,
   },
-  heroSection: {
-    padding: 40,
-    alignItems: 'center',
+  content: {
+    padding: 20,
   },
-  heroTitle: {
+  title: {
     fontSize: 32,
     fontWeight: '900',
     color: COLORS.text,
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  heroSubtitle: {
-    fontSize: 15,
+  subtitle: {
+    fontSize: 16,
+    lineHeight: 24,
     color: COLORS.textSecondary,
+    marginBottom: 32,
   },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 30,
+  contactInfoSection: {
+    marginBottom: 32,
   },
-  sectionTitle: {
+  contactInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  contactInfoContent: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  contactInfoLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  contactInfoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  formTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: 20,
   },
-  contactCard: {
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  contactGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
-  contactIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(212,175,55,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  contactContent: {
-    flex: 1,
-  },
-  contactTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  contactText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
   form: {
-    gap: 20,
-  },
-  inputContainer: {
-    gap: 8,
+    marginBottom: 40,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
+    marginBottom: 8,
+    marginTop: 16,
   },
   input: {
     backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: COLORS.text,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: COLORS.text,
   },
   textArea: {
-    height: 120,
-    paddingTop: 14,
+    minHeight: 120,
+    paddingTop: 16,
   },
   submitButton: {
     borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 10,
+    marginTop: 24,
   },
   submitGradient: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
+    alignItems: 'center',
+    padding: 18,
   },
   submitText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '900',
     color: '#000',
-  },
-  locationCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  locationIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(212,175,55,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  locationContent: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  locationText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  hoursCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(212,175,55,0.1)',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    gap: 16,
-  },
-  hoursContent: {
-    flex: 1,
-  },
-  hoursTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  hoursText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    marginRight: 8,
   },
 });

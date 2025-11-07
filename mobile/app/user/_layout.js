@@ -1,5 +1,4 @@
 // app/(user)/_layout.js
-// User/Passenger Tab Navigation
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,11 +26,7 @@ export default function UserTabsLayout() {
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons
-                name={focused ? 'home' : 'home-outline'}
-                size={24}
-                color={color}
-              />
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
             </View>
           ),
         }}
@@ -44,11 +39,7 @@ export default function UserTabsLayout() {
           title: 'My Rides',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons
-                name={focused ? 'list' : 'list-outline'}
-                size={24}
-                color={color}
-              />
+              <Ionicons name={focused ? 'list' : 'list-outline'} size={24} color={color} />
             </View>
           ),
         }}
@@ -75,11 +66,7 @@ export default function UserTabsLayout() {
           title: 'Fleet',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons
-                name={focused ? 'car' : 'car-outline'}
-                size={24}
-                color={color}
-              />
+              <Ionicons name={focused ? 'car' : 'car-outline'} size={24} color={color} />
             </View>
           ),
         }}
@@ -92,11 +79,7 @@ export default function UserTabsLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons
-                name={focused ? 'person' : 'person-outline'}
-                size={24}
-                color={color}
-              />
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
             </View>
           ),
         }}

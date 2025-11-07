@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../../config/colors';
+import COLORS  from '../../config/colors';
 
 export default function PlaceholderImage({ width = 200, height = 200, text = 'Image' }) {
   return (

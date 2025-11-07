@@ -1,7 +1,7 @@
 // app/components/admin/Header.js
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { COLORS } from '../../config/colors';
+import COLORS from '../../config/colors'; // ✅ default import
 
 export default function Header({ userData, onLogout }) {
   return (
@@ -26,6 +26,7 @@ const styles = StyleSheet.create({
     paddingVertical: 25,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
   },
   welcomeText: { fontSize: 14, color: COLORS.textSecondary },
   userName: { fontSize: 24, fontWeight: 'bold', color: COLORS.text, marginTop: 4 },

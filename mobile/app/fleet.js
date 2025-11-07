@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { COLORS } from './config/colors';
+import COLORS  from './config/colors';
 import vehicleService from './services/vehicleService';
 import VehicleCard from './components/vehicles/VehicleCard';
 

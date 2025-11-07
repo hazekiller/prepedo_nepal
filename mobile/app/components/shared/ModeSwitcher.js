@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { switchMode } from '../../store/slices/modeSlice';
-import { COLORS } from '../../config/colors';
+import COLORS  from '../../config/colors';
 
 export default function ModeSwitcher() {
   const router = useRouter();

@@ -15,8 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
-import { COLORS } from '../app/config/colors'; // Adjust path if needed
-import { loginUser } from '../app/store/slices/authSlice'; // Adjust path if needed
+import COLORS  from '../app/config/colors';
+import { loginUser } from '../app/store/slices/authSlice';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -47,13 +47,13 @@ export default function LoginScreen() {
       // Navigate based on role
       switch (result.user.role) {
         case 'admin':
-          router.replace('/admin/admin-dashboard');
+          router.replace('/admin-dashboard');
           break;
         case 'driver':
-          router.replace('/driver/dashboard');
+          router.replace('/driver');
           break;
         default:
-          router.replace('/user/home');
+          router.replace('/user');
       }
     } catch (error) {
       console.error('❌ Login error:', error);
@@ -232,7 +232,7 @@ export default function LoginScreen() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>By continuing, you agree to our </Text>
-            <TouchableOpacity onPress={() => router.push('/terms')}>
+            <TouchableOpacity onPress={() => Alert.alert('Terms', 'Terms & Conditions')}>
               <Text style={styles.footerLink}>Terms & Conditions</Text>
             </TouchableOpacity>
           </View>

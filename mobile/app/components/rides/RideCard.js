@@ -3,7 +3,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../config/colors';
+import  COLORS  from '../../config/colors';
 import bookingService from '../../services/bookingService';
 
 export default function RideCard({ ride, onPress, showStatus = true }) {

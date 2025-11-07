@@ -1,5 +1,5 @@
 // app/config/colors.js - Color Theme Configuration
-export const COLORS = {
+const COLORS = {
   // Primary Colors
   primary: '#D4AF37',        // Gold
   primaryLight: '#E8C966',   // Light Gold
@@ -8,12 +8,13 @@ export const COLORS = {
   // Background Colors
   background: '#000000',     // Black
   backgroundSecondary: '#1A1A1A', // Dark Gray
-  card: '#1A1A1A',          // Card Background
+  cardBackground: '#1A1A1A', // Card Background (was 'card')
   
   // Text Colors
   text: '#FFFFFF',          // White
   textSecondary: '#9E9E9E', // Gray
   textLight: '#CCCCCC',     // Light Gray
+  textMuted: '#666666',     // Muted text
   
   // Status Colors
   success: '#50C878',       // Green
@@ -35,3 +36,5 @@ export const COLORS = {
   gradientStart: '#D4AF37',  // Gold
   gradientEnd: '#C9A955',    // Dark Gold
 };
+
+export default COLORS;

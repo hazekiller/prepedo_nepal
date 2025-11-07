@@ -1,5 +1,5 @@
 // app/services/vehicleService.js
-import API from './api';
+import API from '../config/api';
 
 /**
  * Vehicle Service - Helper functions for vehicle management

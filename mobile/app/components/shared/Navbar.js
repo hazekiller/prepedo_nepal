@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
-import { COLORS } from '../../config/colors';
+import  COLORS  from '../../config/colors';
 
 export default function Navbar() {
   const router = useRouter();

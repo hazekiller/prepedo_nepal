@@ -1,5 +1,5 @@
 // app/config/api.js
-import { ENV } from './_env';
+import ENV from './_env'; // ✅ default import
 
 // Base URL
 const API_BASE_URL = ENV.API_BASE_URL;

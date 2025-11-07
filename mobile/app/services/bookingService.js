@@ -1,273 +1,132 @@
-// app/services/bookingService.js
-import API from './api';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, FlatList } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
+import { useRouter } from 'expo-router';
+import COLORS  from '../config/colors';
+import socketService from '../services/socketService';
 
-/**
- * Booking Service - Helper functions for ride bookings
- */
+export default function BookRideScreen() {
+  const router = useRouter();
+  const { user, token } = useSelector((state) => state.user);
 
-// Vehicle categories with their details
-export const VEHICLE_CATEGORIES = {
-  SEDAN: {
-    id: 'sedan',
-    name: 'Executive Sedan',
-    description: 'Perfect for business travel and airport transfers',
-    capacity: 3,
-    luggage: 2,
-    baseRate: 3500,
-  },
-  SUV: {
-    id: 'suv',
-    name: 'Premium SUV',
-    description: 'Spacious comfort for families and groups',
-    capacity: 6,
-    luggage: 4,
-    baseRate: 5000,
-  },
-  EXECUTIVE: {
-    id: 'executive',
-    name: 'Executive Class',
-    description: 'Ultimate luxury for VIP experiences',
-    capacity: 4,
-    luggage: 3,
-    baseRate: 6500,
-  },
-  LUXURY_VAN: {
-    id: 'luxury-van',
-    name: 'Luxury Van',
-    description: 'Ideal for large groups and events',
-    capacity: 10,
-    luggage: 6,
-    baseRate: 8000,
-  },
-};
+  const [pickupLocation, setPickupLocation] = useState('');
+  const [dropoffLocation, setDropoffLocation] = useState('');
+  const [passengers, setPassengers] = useState('1');
+  const [loading, setLoading] = useState(false);
+  const [rideUpdates, setRideUpdates] = useState([]);
 
-// Booking statuses
-export const BOOKING_STATUS = {
-  PENDING: 'pending',
-  CONFIRMED: 'confirmed',
-  ASSIGNED: 'assigned',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-};
+  useEffect(() => {
+    // Subscribe to booking updates
+    const unsubNew = socketService.on('booking:statusUpdated', (data) => {
+      setRideUpdates((prev) => [data, ...prev]);
+      Alert.alert('Ride Update', `Booking ${data.id} status: ${data.status}`);
+    });
 
-// Payment methods
-export const PAYMENT_METHODS = {
-  CASH: 'cash',
-  ESEWA: 'esewa',
-  KHALTI: 'khalti',
-  CARD: 'card',
-  BANK_TRANSFER: 'bank_transfer',
-};
+    return () => {
+      unsubNew();
+    };
+  }, []);
 
-/**
- * Calculate fare based on distance, duration, and vehicle type
- */
-export const calculateFare = (distance, duration, vehicleCategory, surcharges = {}) => {
-  const category = VEHICLE_CATEGORIES[vehicleCategory] || VEHICLE_CATEGORIES.SEDAN;
-  
-  // Base fare
-  let fare = category.baseRate;
-  
-  // Distance-based calculation (per km)
-  const distanceRate = 150; // NPR per km
-  fare += distance * distanceRate;
-  
-  // Duration-based calculation (per hour)
-  const hourlyRate = category.baseRate * 0.5;
-  fare += duration * hourlyRate;
-  
-  // Apply surcharges
-  if (surcharges.nightCharge) {
-    fare *= 1.25; // 25% night surcharge (10 PM - 6 AM)
-  }
-  
-  if (surcharges.peakHour) {
-    fare *= 1.15; // 15% peak hour surcharge (8-10 AM, 5-7 PM)
-  }
-  
-  if (surcharges.airport) {
-    fare += 500; // Airport pickup/dropoff fee
-  }
-  
-  // Round to nearest 10
-  fare = Math.round(fare / 10) * 10;
-  
-  return {
-    baseFare: category.baseRate,
-    distanceFare: distance * distanceRate,
-    durationFare: duration * hourlyRate,
-    surcharges: fare - (category.baseRate + (distance * distanceRate) + (duration * hourlyRate)),
-    totalFare: fare,
-  };
-};
-
-/**
- * Validate booking data before submission
- */
-export const validateBookingData = (bookingData) => {
-  const errors = {};
-  
-  if (!bookingData.vehicleId) {
-    errors.vehicleId = 'Please select a vehicle';
-  }
-  
-  if (!bookingData.pickupLocation) {
-    errors.pickupLocation = 'Pickup location is required';
-  }
-  
-  if (!bookingData.dropoffLocation) {
-    errors.dropoffLocation = 'Dropoff location is required';
-  }
-  
-  if (!bookingData.pickupDate) {
-    errors.pickupDate = 'Pickup date is required';
-  }
-  
-  if (!bookingData.pickupTime) {
-    errors.pickupTime = 'Pickup time is required';
-  }
-  
-  if (bookingData.passengers < 1) {
-    errors.passengers = 'At least one passenger is required';
-  }
-  
-  // Check if pickup date is in the past
-  const pickupDateTime = new Date(`${bookingData.pickupDate}T${bookingData.pickupTime}`);
-  if (pickupDateTime < new Date()) {
-    errors.pickupDate = 'Pickup date/time cannot be in the past';
-  }
-  
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-  };
-};
-
-/**
- * Format booking data for API submission
- */
-export const formatBookingData = (bookingData) => {
-  return {
-    vehicle_id: bookingData.vehicleId,
-    pickup_location: bookingData.pickupLocation,
-    dropoff_location: bookingData.dropoffLocation,
-    pickup_datetime: `${bookingData.pickupDate}T${bookingData.pickupTime}`,
-    duration: bookingData.duration || 2, // Default 2 hours
-    passengers: bookingData.passengers || 1,
-    special_requests: bookingData.specialRequests || '',
-    payment_method: bookingData.paymentMethod || PAYMENT_METHODS.CASH,
-  };
-};
-
-/**
- * Check if time slot is within peak hours
- */
-export const isPeakHour = (time) => {
-  const hour = new Date(`2000-01-01T${time}`).getHours();
-  return (hour >= 8 && hour < 10) || (hour >= 17 && hour < 19);
-};
-
-/**
- * Check if time slot is during night
- */
-export const isNightTime = (time) => {
-  const hour = new Date(`2000-01-01T${time}`).getHours();
-  return hour >= 22 || hour < 6;
-};
-
-/**
- * Get booking status color
- */
-export const getBookingStatusColor = (status) => {
-  const colors = {
-    pending: '#F39C12',
-    confirmed: '#3498DB',
-    assigned: '#9B59B6',
-    in_progress: '#27AE60',
-    completed: '#2ECC71',
-    cancelled: '#E74C3C',
-  };
-  return colors[status] || '#95A5A6';
-};
-
-/**
- * Get booking status label
- */
-export const getBookingStatusLabel = (status) => {
-  const labels = {
-    pending: 'Pending Confirmation',
-    confirmed: 'Confirmed',
-    assigned: 'Driver Assigned',
-    in_progress: 'In Progress',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-  };
-  return labels[status] || 'Unknown';
-};
-
-/**
- * Estimate fare via API
- */
-export const getEstimatedFare = async (bookingDetails) => {
-  try {
-    const response = await API.bookings.estimateFare(bookingDetails);
-    return response.data;
-  } catch (error) {
-    console.error('Fare estimation error:', error);
-    throw error;
-  }
-};
-
-/**
- * Create a new booking
- */
-export const createBooking = async (bookingData) => {
-  try {
-    // Validate data
-    const validation = validateBookingData(bookingData);
-    if (!validation.isValid) {
-      throw new Error(Object.values(validation.errors).join(', '));
+  const handleCreateRide = async () => {
+    if (!user || !token) {
+      Alert.alert('Error', 'You must be logged in to request a ride.');
+      return;
     }
-    
-    // Format data
-    const formattedData = formatBookingData(bookingData);
-    
-    // Submit booking
-    const response = await API.bookings.create(formattedData);
-    return response.data;
-  } catch (error) {
-    console.error('Booking creation error:', error);
-    throw error;
-  }
-};
 
-/**
- * Get popular pickup locations in Nepal
- */
-export const POPULAR_LOCATIONS = [
-  { id: 1, name: 'Tribhuvan International Airport', address: 'Kathmandu', isAirport: true },
-  { id: 2, name: 'Thamel', address: 'Kathmandu', isAirport: false },
-  { id: 3, name: 'Durbar Marg', address: 'Kathmandu', isAirport: false },
-  { id: 4, name: 'Boudhanath Stupa', address: 'Kathmandu', isAirport: false },
-  { id: 5, name: 'Patan Durbar Square', address: 'Lalitpur', isAirport: false },
-  { id: 6, name: 'Bhaktapur Durbar Square', address: 'Bhaktapur', isAirport: false },
-  { id: 7, name: 'Pokhara Airport', address: 'Pokhara', isAirport: true },
-  { id: 8, name: 'Lakeside', address: 'Pokhara', isAirport: false },
-];
+    if (!pickupLocation || !dropoffLocation) {
+      Alert.alert('Error', 'Please enter both pickup and drop-off locations.');
+      return;
+    }
 
-export default {
-  VEHICLE_CATEGORIES,
-  BOOKING_STATUS,
-  PAYMENT_METHODS,
-  calculateFare,
-  validateBookingData,
-  formatBookingData,
-  isPeakHour,
-  isNightTime,
-  getBookingStatusColor,
-  getBookingStatusLabel,
-  getEstimatedFare,
-  createBooking,
-  POPULAR_LOCATIONS,
-};
+    setLoading(true);
+
+    try {
+      if (!socketService.getConnectionStatus()) {
+        const connected = await socketService.connect();
+        if (!connected) {
+          Alert.alert('Error', 'Unable to connect to server.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const rideData = {
+        passengerId: user.id,
+        passengerName: user.full_name,
+        pickupLocation,
+        dropoffLocation,
+        passengers: parseInt(passengers) || 1,
+        status: 'requested',
+        timestamp: new Date().toISOString(),
+      };
+
+      socketService.send('user:requestRide', rideData);
+
+      Alert.alert('Ride Requested!', 'Your ride request has been sent.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.heading}>Create a Ride</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Pickup Location"
+        value={pickupLocation}
+        onChangeText={setPickupLocation}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Drop-off Location"
+        value={dropoffLocation}
+        onChangeText={setDropoffLocation}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Passengers"
+        value={passengers}
+        onChangeText={setPassengers}
+        keyboardType="numeric"
+      />
+
+      <TouchableOpacity style={styles.button} onPress={handleCreateRide} disabled={loading}>
+        <LinearGradient colors={['#D4AF37', '#FFD700']} style={styles.buttonGradient}>
+          <Text style={styles.buttonText}>{loading ? 'Requesting...' : 'Request Ride'}</Text>
+          <Ionicons name="arrow-forward" size={20} color="#000" />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <Text style={styles.updatesTitle}>Ride Updates:</Text>
+      <FlatList
+        data={rideUpdates}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.updateItem}>
+            <Text style={styles.updateText}>Booking {item.id}: {item.status}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20, backgroundColor: COLORS.background },
+  heading: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, color: COLORS.text },
+  input: { backgroundColor: COLORS.cardBackground, padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border, color: COLORS.text },
+  button: { marginTop: 16, borderRadius: 12, overflow: 'hidden' },
+  buttonGradient: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  buttonText: { fontSize: 16, fontWeight: 'bold', marginRight: 8, color: '#000' },
+  updatesTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 12, color: COLORS.text },
+  updateItem: { padding: 12, backgroundColor: COLORS.cardBackground, borderRadius: 12, marginBottom: 8 },
+  updateText: { color: COLORS.text },
+});

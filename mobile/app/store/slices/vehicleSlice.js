@@ -1,6 +1,6 @@
 // app/store/slices/vehicleSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import API from '../../services/api';
+import API from '../../config/api';
 
 // Async thunks
 export const fetchVehicles = createAsyncThunk(
