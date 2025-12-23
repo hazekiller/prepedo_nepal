@@ -13,12 +13,13 @@ import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { COLORS } from '../config/colors';
-import { API_URL } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function UserDashboard() {
   const router = useRouter();
-  const { user } = useSelector((state) => state.user);
+  const { user, token } = useSelector((state) => state.auth);
 
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -36,22 +37,23 @@ export default function UserDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch user stats and recent bookings
-      const response = await fetch(`${API_URL}/api/bookings/user/${user?.id}`);
-      const data = await response.json();
+      if (!token) return;
 
-      if (data.success) {
-        const bookings = data.data;
-        setRecentBookings(bookings.slice(0, 3)); // Get last 3 bookings
+      const response = await axios.get(`${API_BASE_URL}/api/bookings/my-bookings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-        // Calculate stats
+      if (response.data.success) {
+        const bookings = response.data.data.bookings;
+        setRecentBookings(bookings.slice(0, 3));
+
         const stats = {
           totalBookings: bookings.length,
-          activeBookings: bookings.filter(b => ['pending', 'accepted', 'in_progress'].includes(b.status)).length,
+          activeBookings: bookings.filter(b => ['pending', 'accepted', 'started', 'arrived'].includes(b.status)).length,
           completedBookings: bookings.filter(b => b.status === 'completed').length,
           totalSpent: bookings
             .filter(b => b.status === 'completed')
-            .reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0),
+            .reduce((sum, b) => sum + parseFloat(b.estimated_fare || 0), 0),
         };
         setStats(stats);
       }
@@ -153,7 +155,7 @@ export default function UserDashboard() {
             </View>
           ) : (
             recentBookings.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} onPress={() => router.push(`/user/bookings/${booking.id}`)} />
+              <BookingCard key={booking.id} booking={booking} onPress={() => router.push(`/user/active-ride?id=${booking.id}`)} />
             ))
           )}
         </View>
@@ -225,7 +227,7 @@ function BookingCard({ booking, onPress }) {
       </View>
 
       <View style={styles.bookingFooter}>
-        <Text style={styles.bookingPrice}>NPR {booking.total_price || '0.00'}</Text>
+        <Text style={styles.bookingPrice}>NPR {booking.estimated_fare || '0.00'}</Text>
         <Text style={styles.bookingDate}>
           {new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </Text>

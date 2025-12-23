@@ -347,9 +347,30 @@ class SocketHandler {
     this.io.to('drivers:online').emit('booking:new', booking);
   }
 
+  emitBookingTaken(bookingId) {
+    console.log(`🚫 Broadcasting booking ${bookingId} as taken to all drivers`);
+    this.io.to('drivers:online').emit('booking:taken', { bookingId });
+  }
+
   emitBookingAccepted(booking, userId) {
     console.log(`✅ Notifying user ${userId} - booking ${booking.id} accepted`);
     this.io.to(`user:${userId}`).emit('booking:accepted', booking);
+  }
+
+  /**
+   * Notify user about a new driver offer
+   */
+  emitNewOfferToUser(offer, userId) {
+    console.log(`🔔 Notifying user ${userId} - new offer from driver ${offer.driver_name}`);
+    this.io.to(`user:${userId}`).emit('booking:newOffer', offer);
+  }
+
+  /**
+   * Notify driver that they have been assigned to a booking
+   */
+  emitBookingAssignedToDriver(booking, driverId) {
+    console.log(`🚖 Notifying driver ${driverId} - assigned to booking ${booking.id}`);
+    this.io.to(`driver:${driverId}`).emit('booking:assigned', booking);
   }
 
   // ✅ FIXED HERE

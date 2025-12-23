@@ -14,16 +14,21 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// Configure CORS origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
+    'http://localhost:8081',
+    'http://192.168.1.68:8081',
+    'http://localhost:19006',
+    'exp://192.168.1.68:19000',
+    'exp://192.168.1.68:8081',
+  ];
+
 // Initialize Socket.io
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:8081',
-      'http://192.168.1.68:8081',
-      'http://localhost:19006',
-      'exp://192.168.1.68:19000',
-      'exp://192.168.1.68:8081',
-    ],
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
   },
@@ -45,12 +50,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Configure CORS for HTTP requests
 app.use(cors({
-  origin: [
-    'http://localhost:8081',
-    'http://192.168.1.68:8081',
-    'http://localhost:19006',
-    'exp://192.168.1.68:19000',
-  ],
+  origin: allowedOrigins,
   credentials: true
 }));
 
@@ -93,6 +93,10 @@ app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/ratings', require('./routes/ratingRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+
+// Global routes
+const bookingController = require('./controllers/bookingController');
+app.get('/api/vehicles', bookingController.getVehicles);
 
 // 404 handler
 app.use((req, res) => {

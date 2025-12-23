@@ -13,19 +13,28 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import  COLORS  from '../config/colors';
+import COLORS from '../config/colors';
 import { API_URL } from '../config/api';
+import MapComponent from '../components/shared/MapComponent';
 
 export default function VehicleSelectionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  
+
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
 
   // Get pickup and dropoff from params
-  const { pickupLocation, dropoffLocation, passengers } = params;
+  const {
+    pickupLocation,
+    pickupLatitude,
+    pickupLongitude,
+    dropoffLocation,
+    dropoffLatitude,
+    dropoffLongitude,
+    passengers
+  } = params;
 
   useEffect(() => {
     fetchVehicles();
@@ -35,7 +44,7 @@ export default function VehicleSelectionScreen() {
     try {
       const response = await fetch(`${API_URL}/api/vehicles`);
       const data = await response.json();
-      
+
       if (data.success) {
         setVehicles(data.data);
       }
@@ -61,11 +70,16 @@ export default function VehicleSelectionScreen() {
       pathname: '/booking/date-time',
       params: {
         pickupLocation,
+        pickupLatitude,
+        pickupLongitude,
         dropoffLocation,
+        dropoffLatitude,
+        dropoffLongitude,
         passengers,
         vehicleId: selectedVehicle.id,
         vehicleName: selectedVehicle.name,
         vehiclePrice: selectedVehicle.price_per_km || selectedVehicle.base_price,
+        vehicleType: selectedVehicle.category?.toLowerCase() || 'car',
       },
     });
   };
@@ -90,6 +104,9 @@ export default function VehicleSelectionScreen() {
           <Text style={styles.passengersInfo}>
             <Ionicons name="people" size={16} color={COLORS.textSecondary} /> {passengers} passenger(s)
           </Text>
+          <View style={{ marginTop: 16 }}>
+            <MapComponent height={150} />
+          </View>
         </View>
 
         <View style={styles.vehicleList}>

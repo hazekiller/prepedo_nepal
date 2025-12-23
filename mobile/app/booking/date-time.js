@@ -13,7 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import COLORS  from '../config/colors';
+import COLORS from '../config/colors';
 
 export default function DateTimeScreen() {
   const router = useRouter();
@@ -25,7 +25,19 @@ export default function DateTimeScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bookingType, setBookingType] = useState('now'); // 'now' or 'scheduled'
 
-  const { pickupLocation, dropoffLocation, passengers, vehicleId, vehicleName, vehiclePrice } = params;
+  const {
+    pickupLocation,
+    pickupLatitude,
+    pickupLongitude,
+    dropoffLocation,
+    dropoffLatitude,
+    dropoffLongitude,
+    passengers,
+    vehicleId,
+    vehicleName,
+    vehiclePrice,
+    vehicleType
+  } = params;
 
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -49,13 +61,13 @@ export default function DateTimeScreen() {
       const combined = new Date(date);
       combined.setHours(time.getHours());
       combined.setMinutes(time.getMinutes());
-      
+
       // Check if scheduled time is in the past
       if (combined < new Date()) {
         Alert.alert('Invalid Time', 'Please select a future date and time');
         return;
       }
-      
+
       scheduledDateTime = combined.toISOString();
     }
 
@@ -63,11 +75,16 @@ export default function DateTimeScreen() {
       pathname: '/booking/review',
       params: {
         pickupLocation,
+        pickupLatitude,
+        pickupLongitude,
         dropoffLocation,
+        dropoffLatitude,
+        dropoffLongitude,
         passengers,
         vehicleId,
         vehicleName,
         vehiclePrice,
+        vehicleType,
         bookingType,
         scheduledDateTime: scheduledDateTime || '',
       },
@@ -102,7 +119,7 @@ export default function DateTimeScreen() {
           {/* Booking Type Selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Booking Type</Text>
-            
+
             <TouchableOpacity
               style={[styles.optionCard, bookingType === 'now' && styles.optionCardSelected]}
               onPress={() => setBookingType('now')}

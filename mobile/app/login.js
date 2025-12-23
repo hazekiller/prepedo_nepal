@@ -15,8 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
-import  COLORS  from '../app/config/colors';
-import { loginUser } from '../app/store/slices/authSlice';
+import COLORS from './config/colors';
+import { loginUser } from './store/slices/authSlice';
 
 export default function LoginScreen() {
   const router = useRouter();

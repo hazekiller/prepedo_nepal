@@ -13,34 +13,75 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import  COLORS  from '../config/colors';
+import COLORS from '../config/colors';
 import socketService from '../services/socketService';
+import MapComponent from '../components/shared/MapComponent';
+import { API_BASE_URL } from '../config/api';
+import axios from 'axios';
 
 export default function ReviewBookingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { user, token } = useSelector((state) => state.user);
+  const { user, token } = useSelector((state) => state.auth); // Use auth slice
 
   const [loading, setLoading] = useState(false);
+  const [estimatedPrice, setEstimatedPrice] = useState(0);
+  const [tax, setTax] = useState(0);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [fetchingFare, setFetchingFare] = useState(true);
 
   const {
     pickupLocation,
+    pickupLatitude,
+    pickupLongitude,
     dropoffLocation,
+    dropoffLatitude,
+    dropoffLongitude,
     passengers,
     vehicleId,
     vehicleName,
     vehiclePrice,
     bookingType,
     scheduledDateTime,
+    distance = 10, // Default distance if not passed
+    vehicleType = 'car' // Default type
   } = params;
 
-  // Calculate estimated price (simple calculation, can be improved)
-  const estimatedDistance = 10; // km - you can calculate this based on coordinates
-  const baseFare = parseFloat(vehiclePrice) || 500;
-  const perKmRate = 50;
-  const estimatedPrice = baseFare + (estimatedDistance * perKmRate);
-  const tax = estimatedPrice * 0.13; // 13% tax
-  const totalPrice = estimatedPrice + tax;
+  React.useEffect(() => {
+    fetchFareEstimate();
+  }, []);
+
+  const fetchFareEstimate = async () => {
+    try {
+      setFetchingFare(true);
+      const response = await axios.post(`${API_BASE_URL}/api/bookings/calculate-fare`, {
+        distance: parseFloat(distance),
+        vehicle_type: vehicleType
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        const fare = response.data.data.fare;
+        const calculatedTax = fare * 0.13;
+        setEstimatedPrice(fare);
+        setTax(calculatedTax);
+        setTotalPrice(fare + calculatedTax);
+      }
+    } catch (error) {
+      console.error('Error fetching fare estimate:', error);
+      // Fallback logic
+      const base = parseFloat(vehiclePrice) || 150;
+      const rate = 35;
+      const fare = base + (parseFloat(distance) * rate);
+      const calculatedTax = fare * 0.13;
+      setEstimatedPrice(fare);
+      setTax(calculatedTax);
+      setTotalPrice(fare + calculatedTax);
+    } finally {
+      setFetchingFare(false);
+    }
+  };
 
   const handleConfirmBooking = async () => {
     if (!user || !token) {
@@ -52,45 +93,35 @@ export default function ReviewBookingScreen() {
     setLoading(true);
 
     try {
-      const bookingData = {
-        userId: user.id,
-        userName: user.full_name,
-        userEmail: user.email,
-        pickupLocation,
-        dropoffLocation,
-        passengers: parseInt(passengers),
-        vehicleId: parseInt(vehicleId),
-        vehicleName,
-        bookingType,
-        scheduledDateTime: scheduledDateTime || null,
-        estimatedPrice: totalPrice.toFixed(2),
-        status: 'pending',
-        timestamp: new Date().toISOString(),
-      };
+      const response = await axios.post(`${API_BASE_URL}/api/bookings`, {
+        pickup_location: pickupLocation,
+        pickup_latitude: parseFloat(pickupLatitude) || 27.6915,
+        pickup_longitude: parseFloat(pickupLongitude) || 85.3420,
+        dropoff_location: dropoffLocation,
+        dropoff_latitude: parseFloat(dropoffLatitude) || 27.7027,
+        dropoff_longitude: parseFloat(dropoffLongitude) || 85.3123,
+        vehicle_type: vehicleType,
+        distance: parseFloat(distance),
+        notes: `Ride for ${passengers} passengers`
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-      // Emit booking via socket
-      if (socketService.socket) {
-        socketService.socket.emit('booking:create', bookingData, (response) => {
-          if (response.success) {
-            router.push({
-              pathname: '/booking/confirmation',
-              params: {
-                bookingId: response.bookingId,
-                ...bookingData,
-              },
-            });
-          } else {
-            Alert.alert('Error', response.message || 'Failed to create booking');
-            setLoading(false);
-          }
+      if (response.data.success) {
+        router.push({
+          pathname: '/booking/confirmation',
+          params: {
+            bookingId: response.data.data.id,
+            ...response.data.data
+          },
         });
       } else {
-        Alert.alert('Error', 'Unable to connect to server');
-        setLoading(false);
+        Alert.alert('Error', response.data.message || 'Failed to create booking');
       }
     } catch (error) {
       console.error('Booking error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', error.response?.data?.message || 'Something went wrong. Please try again.');
+    } finally {
       setLoading(false);
     }
   };
@@ -113,93 +144,99 @@ export default function ReviewBookingScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Review Your Booking</Text>
           <Text style={styles.subtitle}>Please confirm all details before proceeding</Text>
-        </View>
-
-        <View style={styles.content}>
-          {/* Route Details */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Route Details</Text>
-            <View style={styles.card}>
-              <View style={styles.routeItem}>
-                <View style={styles.locationDot} style={{backgroundColor: COLORS.primary}} />
-                <View style={styles.locationInfo}>
-                  <Text style={styles.locationLabel}>Pickup</Text>
-                  <Text style={styles.locationText}>{pickupLocation}</Text>
-                </View>
-              </View>
-              
-              <View style={styles.routeLine} />
-              
-              <View style={styles.routeItem}>
-                <View style={[styles.locationDot, {backgroundColor: '#FF6B6B'}]} />
-                <View style={styles.locationInfo}>
-                  <Text style={styles.locationLabel}>Drop-off</Text>
-                  <Text style={styles.locationText}>{dropoffLocation}</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Vehicle Details */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Vehicle</Text>
-            <View style={styles.card}>
-              <View style={styles.infoRow}>
-                <Ionicons name="car" size={20} color={COLORS.primary} />
-                <Text style={styles.infoText}>{vehicleName}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="people" size={20} color={COLORS.primary} />
-                <Text style={styles.infoText}>{passengers} passenger(s)</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Timing Details */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Timing</Text>
-            <View style={styles.card}>
-              <View style={styles.infoRow}>
-                <Ionicons name={bookingType === 'now' ? 'flash' : 'calendar'} size={20} color={COLORS.primary} />
-                <Text style={styles.infoText}>
-                  {bookingType === 'now' ? 'Pick up now' : `Scheduled: ${formatDateTime(scheduledDateTime)}`}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Price Breakdown */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Price Breakdown</Text>
-            <View style={styles.card}>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Base Fare</Text>
-                <Text style={styles.priceValue}>NPR {baseFare.toFixed(2)}</Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Distance ({estimatedDistance} km)</Text>
-                <Text style={styles.priceValue}>NPR {(estimatedDistance * perKmRate).toFixed(2)}</Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Tax (13%)</Text>
-                <Text style={styles.priceValue}>NPR {tax.toFixed(2)}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.priceRow}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
-                <Text style={styles.totalValue}>NPR {totalPrice.toFixed(2)}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Terms */}
-          <View style={styles.termsContainer}>
-            <Ionicons name="information-circle-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={styles.termsText}>
-              By confirming this booking, you agree to our terms and conditions
-            </Text>
+          <View style={{ marginTop: 20 }}>
+            <MapComponent height={180} />
           </View>
         </View>
+
+        {fetchingFare ? (
+          <View style={styles.loadingFare}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.loadingFareText}>Calculating KTM Valley Fare...</Text>
+          </View>
+        ) : (
+          <View style={styles.content}>
+            {/* Route Details */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Route Details</Text>
+              <View style={styles.card}>
+                <View style={styles.routeItem}>
+                  <View style={[styles.locationDot, { backgroundColor: COLORS.primary }]} />
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.locationLabel}>Pickup</Text>
+                    <Text style={styles.locationText}>{pickupLocation}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.routeLine} />
+
+                <View style={styles.routeItem}>
+                  <View style={[styles.locationDot, { backgroundColor: '#FF6B6B' }]} />
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.locationLabel}>Drop-off</Text>
+                    <Text style={styles.locationText}>{dropoffLocation}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Vehicle Details */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Vehicle</Text>
+              <View style={styles.card}>
+                <View style={styles.infoRow}>
+                  <Ionicons name="car" size={20} color={COLORS.primary} />
+                  <Text style={styles.infoText}>{vehicleName}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Ionicons name="people" size={20} color={COLORS.primary} />
+                  <Text style={styles.infoText}>{passengers} passenger(s)</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Timing Details */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Timing</Text>
+              <View style={styles.card}>
+                <View style={styles.infoRow}>
+                  <Ionicons name={bookingType === 'now' ? 'flash' : 'calendar'} size={20} color={COLORS.primary} />
+                  <Text style={styles.infoText}>
+                    {bookingType === 'now' ? 'Pick up now' : `Scheduled: ${formatDateTime(scheduledDateTime)}`}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Price Breakdown */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Price Breakdown (KTM Valley Rate)</Text>
+              <View style={styles.card}>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Estimated Fare</Text>
+                  <Text style={styles.priceValue}>NPR {estimatedPrice.toFixed(2)}</Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Tax (13%)</Text>
+                  <Text style={styles.priceValue}>NPR {tax.toFixed(2)}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.priceRow}>
+                  <Text style={styles.totalLabel}>Total Amount</Text>
+                  <Text style={styles.totalValue}>NPR {totalPrice.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Terms */}
+            <View style={styles.termsContainer}>
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.textSecondary} />
+              <Text style={styles.termsText}>
+                By confirming this booking, you agree to our terms and conditions
+              </Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -231,6 +268,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingFare: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 40,
+  },
+  loadingFareText: {
+    marginTop: 12,
+    color: COLORS.textSecondary,
+    fontSize: 14,
   },
   scrollView: {
     flex: 1,

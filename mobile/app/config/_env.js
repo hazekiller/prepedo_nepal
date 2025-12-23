@@ -13,13 +13,13 @@ const ENV = {
   // Base API URL
   API_BASE_URL: getEnvVariable(
     'EXPO_PUBLIC_API_URL',
-    'http://192.168.1.68:5000'
+    'http://localhost:5000'
   ),
 
   // Socket URL for real-time connections
   SOCKET_URL: getEnvVariable(
     'EXPO_PUBLIC_SOCKET_URL',
-    'http://192.168.1.68:5000'
+    'http://localhost:5000'
   ),
 
   // Node environment mode

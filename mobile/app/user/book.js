@@ -1,21 +1,26 @@
 // app/user/book.js - Updated to navigate to booking flow
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../config/colors';
+import MapComponent from '../components/shared/MapComponent';
 
 export default function BookRideScreen() {
   const router = useRouter();
-  const { user, token } = useSelector((state) => state.user);
+  const { user, token } = useSelector((state) => state.auth); // Use auth slice for consistency
 
   const [pickupLocation, setPickupLocation] = useState('');
   const [dropoffLocation, setDropoffLocation] = useState('');
   const [passengers, setPassengers] = useState('1');
 
   const handleContinue = () => {
+    console.log('🚀 handleContinue called');
+    console.log('👤 User:', user ? 'Logged In' : 'Null');
+    console.log('🔑 Token:', token ? 'Present' : 'Null');
+
     if (!user || !token) {
       Alert.alert('Login Required', 'Please login to book a ride', [
         { text: 'Cancel' },
@@ -34,21 +39,33 @@ export default function BookRideScreen() {
       return;
     }
 
+    console.log('➡️ Navigating to vehicle-selection with:', {
+      pickupLocation,
+      dropoffLocation,
+      passengers,
+    });
+
     // Navigate to vehicle selection with booking data
     router.push({
       pathname: '/booking/vehicle-selection',
       params: {
         pickupLocation,
+        pickupLatitude: pickupLocation === 'Kaushaltar' ? 27.6748 : 27.6915,
+        pickupLongitude: pickupLocation === 'Kaushaltar' ? 85.3621 : 85.3420,
         dropoffLocation,
+        dropoffLatitude: dropoffLocation === 'Bagbazaar' ? 27.7058 : 27.7027,
+        dropoffLongitude: dropoffLocation === 'Bagbazaar' ? 85.3182 : 85.3123,
         passengers,
       },
     });
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <Text style={styles.heading}>Book a Ride</Text>
       <Text style={styles.subheading}>Where would you like to go?</Text>
+
+      <MapComponent height={200} />
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
@@ -115,7 +132,7 @@ export default function BookRideScreen() {
           <Ionicons name="arrow-forward" size={20} color="#000" />
         </LinearGradient>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 

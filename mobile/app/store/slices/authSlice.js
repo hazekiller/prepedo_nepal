@@ -1,12 +1,9 @@
 // app/store/authSlice.js - Authentication Redux Slice
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ENV from '../../config/_env';
 
-// IMPORTANT: Change this to your computer's IP address when testing on physical device
-// Find your IP: Windows (ipconfig), Mac (ifconfig), Linux (ip addr)
-const API_URL = 'http://192.168.1.68:5000/api';
-// For physical device, use: const API_URL = 'http://YOUR_IP_ADDRESS:5000/api';
-// Example: const API_URL = 'http://192.168.1.100:5000/api';
+const API_URL = `${ENV.API_BASE_URL}/api`;
 
 // Async thunk for user login
 export const loginUser = createAsyncThunk(
@@ -14,7 +11,7 @@ export const loginUser = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       console.log('🔐 Attempting login...', { email });
-      
+
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -37,7 +34,7 @@ export const loginUser = createAsyncThunk(
       // Save token and user data
       await AsyncStorage.setItem('token', data.data.token);
       await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
-      
+
       if (data.data.driverInfo) {
         await AsyncStorage.setItem('driverInfo', JSON.stringify(data.data.driverInfo));
       }
@@ -58,7 +55,7 @@ export const registerUser = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       console.log('📝 Attempting registration...', userData.email);
-      
+
       const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
@@ -98,7 +95,7 @@ export const registerDriver = createAsyncThunk(
   async (driverData, { rejectWithValue }) => {
     try {
       console.log('🚗 Attempting driver registration...', driverData.email);
-      
+
       const response = await fetch(`${API_URL}/drivers/register`, {
         method: 'POST',
         headers: {

@@ -4,15 +4,34 @@ const { body } = require('express-validator');
 const {
   createBooking,
   getUserBookings,
-  getBookingById,
   getAvailableBookings,
+  getBookingById,
   acceptBooking,
   updateBookingStatus,
   cancelBooking,
-  getDriverBookings
+  getDriverBookings,
+  getFareEstimate,
+  createOffer,
+  getBookingOffers,
+  selectDriver
 } = require('../controllers/bookingController');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
+
+// @route   POST /api/bookings/calculate-fare
+// @desc    Calculate fare estimate
+// @access  Private (User)
+router.post(
+  '/calculate-fare',
+  [
+    verifyToken,
+    checkRole('user'),
+    body('distance').isFloat({ min: 0.1 }).withMessage('Distance must be greater than 0'),
+    body('vehicle_type').isIn(['bike', 'car', 'taxi']).withMessage('Invalid vehicle type'),
+    handleValidationErrors
+  ],
+  getFareEstimate
+);
 
 // @route   POST /api/bookings
 // @desc    Create new booking
@@ -57,10 +76,31 @@ router.get('/driver/my-bookings', verifyToken, checkRole('driver'), getDriverBoo
 // @access  Private
 router.get('/:id', verifyToken, getBookingById);
 
-// @route   PUT /api/bookings/:id/accept
-// @desc    Accept booking
+// @route   POST /api/bookings/:id/offer
+// @desc    Driver makes an offer for a ride
 // @access  Private (Driver)
-router.put('/:id/accept', verifyToken, checkRole('driver'), acceptBooking);
+router.post('/:id/offer', verifyToken, checkRole('driver'), createOffer);
+
+// @route   GET /api/bookings/:id/offers
+// @desc    Get offers for a booking
+// @access  Private
+router.get('/:id/offers', verifyToken, getBookingOffers);
+
+// @route   POST /api/bookings/:id/select-driver
+// @desc    User selects a driver from offers
+// @access  Private (User)
+router.post(
+  '/:id/select-driver',
+  [
+    verifyToken,
+    checkRole('user'),
+    body('driver_id').isInt().withMessage('Driver ID is required'),
+    handleValidationErrors
+  ],
+  selectDriver
+);
+
+// @route   PUT /api/bookings/:id/accept
 
 // @route   PUT /api/bookings/:id/status
 // @desc    Update booking status (arrived, started, completed)

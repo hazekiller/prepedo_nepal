@@ -33,5 +33,6 @@ export const API_ENDPOINTS = {
 };
 
 // Export base URL
+export const API_URL = API_BASE_URL;
 export { API_BASE_URL, ENV };
 export default API_ENDPOINTS;

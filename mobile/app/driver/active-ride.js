@@ -9,18 +9,23 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import COLORS  from '../config/colors';
+import axios from 'axios';
+import COLORS from '../config/colors';
 import socketService from '../services/socketService';
+import { API_BASE_URL } from '../config/api';
+import MapComponent from '../components/shared/MapComponent';
 
 export default function ActiveRideScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { token } = useSelector((state) => state.auth);
 
   const [ride, setRide] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [rideStatus, setRideStatus] = useState('accepted'); // accepted, started, arriving, completed
+  const [rideStatus, setRideStatus] = useState('accepted'); // accepted, arrived, started, completed
 
   useEffect(() => {
     // Get ride data from params or fetch from server
@@ -30,37 +35,51 @@ export default function ActiveRideScreen() {
 
     // Listen for ride updates via socket
     if (socketService.socket) {
-      socketService.socket.on('ride:update', handleRideUpdate);
+      socketService.socket.on('booking:statusUpdated', handleRideUpdate);
     }
+
+    // Simulate location updates for tracking verification
+    const locationInterval = setInterval(() => {
+      if (socketService.socket && params.rideId) {
+        // Emit simulated movement
+        socketService.socket.emit('driver:updateLocation', {
+          latitude: 27.7172 + (Math.random() * 0.01),
+          longitude: 85.3240 + (Math.random() * 0.01)
+        });
+      }
+    }, 5000);
 
     return () => {
       if (socketService.socket) {
-        socketService.socket.off('ride:update', handleRideUpdate);
+        socketService.socket.off('booking:statusUpdated', handleRideUpdate);
       }
+      clearInterval(locationInterval);
     };
   }, [params.rideId]);
 
   const fetchRideDetails = async (rideId) => {
     try {
-      // Fetch ride details from API
-      // const response = await fetch(`${API_URL}/api/rides/${rideId}`);
-      // const data = await response.json();
-      
-      // For now, use mock data
-      const mockRide = {
-        id: rideId,
-        passengerName: 'John Doe',
-        passengerPhone: '+977 9812345678',
-        pickupLocation: 'Thamel, Kathmandu',
-        dropoffLocation: 'Durbar Square, Patan',
-        estimatedFare: 500,
-        distance: '8.5 km',
-        duration: '25 min',
-        status: 'accepted',
-      };
-      
-      setRide(mockRide);
-      setRideStatus(mockRide.status);
+      if (!token) return;
+
+      const response = await axios.get(`${API_BASE_URL}/api/bookings/${rideId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        const data = response.data.data;
+        setRide({
+          id: data.id,
+          passengerName: data.user_name,
+          passengerPhone: data.user_phone,
+          pickupLocation: data.pickup_location,
+          dropoffLocation: data.dropoff_location,
+          estimatedFare: data.estimated_fare,
+          distance: `${data.distance} km`,
+          duration: 'Calculating...', // API doesn't provide this yet
+          status: data.status,
+        });
+        setRideStatus(data.status);
+      }
     } catch (error) {
       console.error('Error fetching ride:', error);
       Alert.alert('Error', 'Failed to load ride details');
@@ -75,6 +94,25 @@ export default function ActiveRideScreen() {
     }
   };
 
+  const updateStatusOnServer = async (newStatus) => {
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/bookings/${params.rideId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.success) {
+        setRideStatus(newStatus);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Update status error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update status');
+      return false;
+    }
+  };
+
   const handleStartRide = () => {
     Alert.alert(
       'Start Ride',
@@ -83,11 +121,27 @@ export default function ActiveRideScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Start',
-          onPress: () => {
-            setRideStatus('started');
-            if (socketService.socket) {
-              socketService.socket.emit('ride:start', { rideId: params.rideId });
+          onPress: async () => {
+            const success = await updateStatusOnServer('started');
+            if (success) {
+              // Status updated via HTTP, socket notification will follow from server
             }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleArrivedAtPickup = () => {
+    Alert.alert(
+      'Arrived at Pickup',
+      'Have you arrived at the pickup location?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            await updateStatusOnServer('arrived');
           },
         },
       ]
@@ -103,6 +157,11 @@ export default function ActiveRideScreen() {
         {
           text: 'Yes',
           onPress: () => {
+            // Note: The UI shows "arriving" status which isn't in DB enum, 
+            // but we use "arrived" button to transition to "completed" usually.
+            // Let's stick to the DB enum: 'arrived', 'started', 'completed'.
+            // If the UI needs an intermediate "almost there" state, we'd need DB change.
+            // For now, let's just keep the local state for UI and wait for final completion.
             setRideStatus('arriving');
           },
         },
@@ -118,18 +177,13 @@ export default function ActiveRideScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Complete',
-          onPress: () => {
-            setRideStatus('completed');
-            if (socketService.socket) {
-              socketService.socket.emit('ride:complete', {
-                rideId: params.rideId,
-                fare: ride?.estimatedFare,
-              });
+          onPress: async () => {
+            const success = await updateStatusOnServer('completed');
+            if (success) {
+              setTimeout(() => {
+                router.back();
+              }, 2000);
             }
-            
-            setTimeout(() => {
-              router.back();
-            }, 2000);
           },
         },
       ]
@@ -204,9 +258,9 @@ export default function ActiveRideScreen() {
           <Ionicons
             name={
               rideStatus === 'accepted' ? 'checkmark-circle' :
-              rideStatus === 'started' ? 'car' :
-              rideStatus === 'arriving' ? 'location' :
-              'checkmark-done-circle'
+                rideStatus === 'started' ? 'car' :
+                  rideStatus === 'arriving' ? 'location' :
+                    'checkmark-done-circle'
             }
             size={32}
             color={COLORS.primary}
@@ -217,6 +271,10 @@ export default function ActiveRideScreen() {
             {rideStatus === 'arriving' && 'Arriving at Destination'}
             {rideStatus === 'completed' && 'Ride Completed'}
           </Text>
+        </View>
+
+        <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
+          <MapComponent height={220} />
         </View>
 
         {/* Passenger Info */}
@@ -277,12 +335,21 @@ export default function ActiveRideScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           {rideStatus === 'accepted' && (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleStartRide}>
-              <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.buttonGradient}>
-                <Text style={styles.primaryButtonText}>Start Ride</Text>
-                <Ionicons name="arrow-forward" size={20} color="#000" />
-              </LinearGradient>
-            </TouchableOpacity>
+            <View>
+              <TouchableOpacity style={[styles.primaryButton, { marginBottom: 12 }]} onPress={handleArrivedAtPickup}>
+                <LinearGradient colors={['#4A90E2', '#357ABD']} style={styles.buttonGradient}>
+                  <Text style={styles.primaryButtonText}>Arrived at Pickup</Text>
+                  <Ionicons name="location" size={20} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.primaryButton} onPress={handleStartRide}>
+                <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.buttonGradient}>
+                  <Text style={styles.primaryButtonText}>Start Ride</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#000" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           )}
 
           {rideStatus === 'started' && (

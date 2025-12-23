@@ -206,6 +206,21 @@ const initializeDatabase = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Booking offers table (for multi-driver choice flow)
+    await promisePool.query(`
+      CREATE TABLE IF NOT EXISTS booking_offers (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        booking_id INT NOT NULL,
+        driver_id INT NOT NULL,
+        status ENUM('pending', 'accepted', 'rejected') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+        FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE,
+        INDEX idx_booking_id (booking_id),
+        INDEX idx_driver_id (driver_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     console.log('✅ Database tables initialized successfully');
   } catch (error) {
     console.error('❌ Error initializing database:', error.message);
