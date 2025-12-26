@@ -307,17 +307,20 @@ const getAvailableBookings = async (req, res) => {
     }
 
     // Get pending bookings matching driver's vehicle type
+    // Also check if this driver has already sent an offer
     const [bookings] = await promisePool.query(
       `SELECT 
         b.*,
-        u.full_name as user_name, u.phone as user_phone
+        u.full_name as user_name, u.phone as user_phone,
+        CASE WHEN bo.id IS NOT NULL THEN TRUE ELSE FALSE END as offer_sent
       FROM bookings b
       INNER JOIN users u ON b.user_id = u.id
+      LEFT JOIN booking_offers bo ON b.id = bo.booking_id AND bo.driver_id = ?
       WHERE b.status = 'pending' 
         AND b.vehicle_type = ?
       ORDER BY b.created_at DESC
       LIMIT 20`,
-      [driver.vehicle_type]
+      [driver.id, driver.vehicle_type]
     );
 
     res.json({

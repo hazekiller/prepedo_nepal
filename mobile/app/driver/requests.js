@@ -179,15 +179,23 @@ export default function RequestsScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={() => handleSendOffer(item.id)}
-                disabled={acceptingId !== null}
+                style={[styles.acceptButton, item.offer_sent && styles.disabledButton]}
+                onPress={() => !item.offer_sent && handleSendOffer(item.id)}
+                disabled={acceptingId !== null || item.offer_sent}
               >
-                <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.acceptGradient}>
+                <LinearGradient
+                  colors={item.offer_sent ? ['#444', '#333'] : [COLORS.primary, '#FFD700']}
+                  style={styles.acceptGradient}
+                >
                   {acceptingId === item.id ? (
                     <ActivityIndicator size="small" color="#000" />
                   ) : (
-                    <Text style={styles.acceptText}>Send Offer</Text>
+                    <>
+                      {item.offer_sent && <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} style={{ marginRight: 5 }} />}
+                      <Text style={[styles.acceptText, item.offer_sent && { color: COLORS.primary }]}>
+                        {item.offer_sent ? 'Offer Sent' : 'Send Offer'}
+                      </Text>
+                    </>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -262,7 +270,8 @@ const styles = StyleSheet.create({
   routeText: { color: COLORS.text, fontSize: 14, marginLeft: 10, flex: 1 },
   routeLine: { width: 1, height: 10, backgroundColor: COLORS.border, marginLeft: 7, marginBottom: 8 },
   acceptButton: { borderRadius: 12, overflow: 'hidden' },
-  acceptGradient: { paddingVertical: 14, alignItems: 'center' },
+  disabledButton: { opacity: 0.8 },
+  acceptGradient: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
   acceptText: { color: "#000", fontWeight: "900", fontSize: 16 },
   emptyContainer: { alignItems: 'center', marginTop: 100 },
   emptyText: { color: COLORS.textSecondary, marginTop: 16, fontSize: 16 },
