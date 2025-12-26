@@ -48,12 +48,12 @@ export default function BookingConfirmationScreen() {
     fetchOffers();
 
     // Listen for driver acceptance and new offers
-    const socket = socketService.socket;
-    if (socket && bookingId) {
+    // Listen for driver acceptance and new offers
+    if (bookingId) {
       console.log('📌 Subscribing to booking updates:', bookingId);
-      socket.emit('booking:subscribe', { bookingId });
+      socketService.send('booking:subscribe', { bookingId });
 
-      socket.on('booking:newOffer', (offer) => {
+      const unsubscribeOffer = socketService.on('booking:newOffer', (offer) => {
         console.log('🔔 New offer received:', offer.driver_name);
         setOffers(prev => {
           // Check if offer already exists to avoid duplicates
@@ -62,18 +62,17 @@ export default function BookingConfirmationScreen() {
         });
       });
 
-      socket.on('booking:accepted', (booking) => {
+      const unsubscribeAccepted = socketService.on('booking:accepted', (booking) => {
         console.log('✅ Driver confirmed for booking:', booking.id);
         router.push(`/user/active-ride?id=${booking.id}`);
       });
-    }
 
-    return () => {
-      if (socket) {
-        socket.off('booking:newOffer');
-        socket.off('booking:accepted');
-      }
-    };
+      return () => {
+        socketService.send('booking:unsubscribe', { bookingId });
+        unsubscribeOffer();
+        unsubscribeAccepted();
+      };
+    }
   }, [bookingId]);
 
   const fetchOffers = async () => {

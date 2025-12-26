@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../config/colors';
@@ -25,7 +26,6 @@ export default function VehicleSelectionScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
 
-  // Get pickup and dropoff from params
   const {
     pickupLocation,
     pickupLatitude,
@@ -36,21 +36,39 @@ export default function VehicleSelectionScreen() {
     passengers
   } = params;
 
+  // Change: Use selector to get auth token
+  const { token } = useSelector((state) => state.auth);
+
   useEffect(() => {
-    fetchVehicles();
+    fetchQuotes();
   }, []);
 
-  const fetchVehicles = async () => {
+  const fetchQuotes = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/vehicles`);
+      // Change: Call new quotes API endpoint
+      const response = await fetch(`${API_URL}/api/bookings/quotes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          pickup_latitude: parseFloat(pickupLatitude),
+          pickup_longitude: parseFloat(pickupLongitude),
+          dropoff_latitude: parseFloat(dropoffLatitude),
+          dropoff_longitude: parseFloat(dropoffLongitude)
+        }),
+      });
       const data = await response.json();
 
       if (data.success) {
-        setVehicles(data.data);
+        setVehicles(data.data.quotes);
+      } else {
+        Alert.alert('Error', data.message || 'Failed to load vehicle options');
       }
     } catch (error) {
-      console.error('Error fetching vehicles:', error);
-      Alert.alert('Error', 'Failed to load vehicles');
+      console.error('Error fetching quotes:', error);
+      Alert.alert('Error', 'Failed to calculate fares');
     } finally {
       setLoading(false);
     }
@@ -62,7 +80,7 @@ export default function VehicleSelectionScreen() {
 
   const handleContinue = () => {
     if (!selectedVehicle) {
-      Alert.alert('Select Vehicle', 'Please select a vehicle to continue');
+      Alert.alert('Select Vehicle', 'Please select a vehicle type to continue');
       return;
     }
 
@@ -76,10 +94,11 @@ export default function VehicleSelectionScreen() {
         dropoffLatitude,
         dropoffLongitude,
         passengers,
-        vehicleId: selectedVehicle.id,
+        // Change: Pass type-based data
         vehicleName: selectedVehicle.name,
-        vehiclePrice: selectedVehicle.price_per_km || selectedVehicle.base_price,
-        vehicleType: selectedVehicle.category?.toLowerCase() || 'car',
+        vehiclePrice: selectedVehicle.price,
+        vehicleType: selectedVehicle.type,
+        distance: selectedVehicle.distance
       },
     });
   };
@@ -88,7 +107,7 @@ export default function VehicleSelectionScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading vehicles...</Text>
+        <Text style={styles.loadingText}>Calculating best fares...</Text>
       </View>
     );
   }
@@ -97,12 +116,9 @@ export default function VehicleSelectionScreen() {
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Choose Your Vehicle</Text>
+          <Text style={styles.title}>Choose Ride</Text>
           <Text style={styles.subtitle}>
-            From {pickupLocation} to {dropoffLocation}
-          </Text>
-          <Text style={styles.passengersInfo}>
-            <Ionicons name="people" size={16} color={COLORS.textSecondary} /> {passengers} passenger(s)
+            Best prices for your trip to {dropoffLocation || 'Destination'}
           </Text>
           <View style={{ marginTop: 16 }}>
             <MapComponent height={150} />
@@ -131,8 +147,10 @@ export default function VehicleSelectionScreen() {
             colors={selectedVehicle ? [COLORS.primary, '#FFD700'] : ['#555', '#666']}
             style={styles.continueGradient}
           >
-            <Text style={styles.continueText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#000" />
+            <Text style={styles.continueText}>
+              {selectedVehicle ? `Book ${selectedVehicle.name} - NPR ${selectedVehicle.price}` : 'Select a Ride'}
+            </Text>
+            {selectedVehicle && <Ionicons name="arrow-forward" size={20} color="#000" />}
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -147,42 +165,30 @@ function VehicleCard({ vehicle, selected, onSelect }) {
       onPress={onSelect}
       activeOpacity={0.7}
     >
-      <View style={styles.vehicleImageContainer}>
-        {vehicle.image ? (
-          <Image source={{ uri: vehicle.image }} style={styles.vehicleImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.vehicleImagePlaceholder}>
-            <Ionicons name="car" size={48} color={COLORS.textMuted} />
-          </View>
-        )}
-      </View>
+      <View style={styles.vehicleContent}>
+        {/* Left: Image */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: vehicle.image_url }}
+            style={styles.vehicleImage}
+            resizeMode="contain"
+          />
+        </View>
 
-      <View style={styles.vehicleInfo}>
-        <View style={styles.vehicleHeader}>
+        {/* Middle: Info */}
+        <View style={styles.infoContainer}>
           <Text style={styles.vehicleName}>{vehicle.name}</Text>
-          {selected && (
-            <View style={styles.selectedBadge}>
-              <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.vehicleCategory}>{vehicle.category || 'Luxury'}</Text>
-
-        <View style={styles.vehicleFeatures}>
-          <View style={styles.feature}>
-            <Ionicons name="people" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.featureText}>{vehicle.capacity || 4} seats</Text>
-          </View>
-          <View style={styles.feature}>
-            <Ionicons name="speedometer" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.featureText}>{vehicle.transmission || 'Automatic'}</Text>
+          <Text style={styles.etaText}>{vehicle.eta} drop-off</Text>
+          <View style={styles.capacityRow}>
+            <Ionicons name="person" size={12} color={COLORS.textSecondary} />
+            <Text style={styles.capacityText}>{vehicle.capacity}</Text>
           </View>
         </View>
 
+        {/* Right: Price */}
         <View style={styles.priceContainer}>
-          <Text style={styles.priceLabel}>Base Fare</Text>
-          <Text style={styles.price}>NPR {vehicle.base_price || vehicle.price_per_km || '500'}</Text>
+          <Text style={styles.priceText}>NPR {vehicle.price}</Text>
+          {selected && <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} style={{ marginTop: 4 }} />}
         </View>
       </View>
     </TouchableOpacity>
@@ -219,14 +225,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
-  passengersInfo: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginBottom: 8,
   },
   vehicleList: {
     paddingHorizontal: 20,
@@ -234,90 +235,65 @@ const styles = StyleSheet.create({
   },
   vehicleCard: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   vehicleCardSelected: {
     borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: 'rgba(212, 175, 55, 0.05)',
   },
-  vehicleImageContainer: {
-    width: '100%',
-    height: 180,
-    backgroundColor: COLORS.border,
+  vehicleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  imageContainer: {
+    width: 60,
+    height: 60,
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   vehicleImage: {
     width: '100%',
     height: '100%',
   },
-  vehicleImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.border,
-  },
-  vehicleInfo: {
-    padding: 16,
-  },
-  vehicleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+  infoContainer: {
+    flex: 1,
   },
   vehicleName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: COLORS.text,
+    marginBottom: 4,
   },
-  selectedBadge: {
-    marginLeft: 8,
+  etaText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
   },
-  vehicleCategory: {
-    fontSize: 14,
-    color: COLORS.primary,
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  vehicleFeatures: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  feature: {
+  capacityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
   },
-  featureText: {
-    fontSize: 14,
+  capacityText: {
+    fontSize: 12,
     color: COLORS.textSecondary,
-    marginLeft: 6,
+    marginLeft: 4,
   },
   priceContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-  priceLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: COLORS.primary,
+  priceText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
   },
   footer: {
     position: 'absolute',
@@ -340,11 +316,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 18,
+    padding: 16,
   },
   continueText: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#000',
     marginRight: 8,
   },

@@ -36,7 +36,8 @@ export default function DateTimeScreen() {
     vehicleId,
     vehicleName,
     vehiclePrice,
-    vehicleType
+    vehicleType,
+    distance
   } = params;
 
   const handleDateChange = (event, selectedDate) => {
@@ -85,6 +86,7 @@ export default function DateTimeScreen() {
         vehicleName,
         vehiclePrice,
         vehicleType,
+        distance, // Pass distance forward
         bookingType,
         scheduledDateTime: scheduledDateTime || '',
       },

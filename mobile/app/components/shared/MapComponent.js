@@ -2,16 +2,11 @@ import React from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 import { COLORS } from '../../config/colors';
 
-/**
- * A simple Map component that uses OpenStreetMap/Leaflet for the web platform
- * and displays a placeholder for native platforms.
- */
 const MapComponent = ({ latitude, longitude, zoom = 13, height = 300 }) => {
-    const lat = latitude || 27.7172; // Default to KTM
+    const lat = latitude || 27.7172; 
     const lng = longitude || 85.3240;
 
     if (Platform.OS === 'web') {
-        // Leaflet map embedded via iframe for a free web alternative
         const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01}%2C${lat - 0.01}%2C${lng + 0.01}%2C${lat + 0.01}&layer=mapnik&marker=${lat}%2C${lng}`;
 
         return (
@@ -30,41 +25,56 @@ const MapComponent = ({ latitude, longitude, zoom = 13, height = 300 }) => {
         );
     }
 
-    return (
-        <View style={[styles.container, styles.placeholder, { height }]}>
-            <Text style={styles.placeholderText}>
-                Map View (Native Placeholder)
-            </Text>
-            <Text style={styles.coordinates}>
-                {lat.toFixed(4)}, {lng.toFixed(4)}
-            </Text>
-        </View>
-    );
-};
+    // Native (iOS/Android)
+    try {
+        const MapView = require('react-native-maps').default;
+        const { Marker } = require('react-native-maps');
 
+        return (
+            <View style={[styles.container, { height }]}>
+                <MapView
+                    style={{ flex: 1 }}
+                    initialRegion={{
+                        latitude: lat,
+                        longitude: lng,
+                        latitudeDelta: 0.02,
+                        longitudeDelta: 0.02,
+                    }}
+                >
+                    <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor={COLORS.primary} />
+                </MapView>
+            </View>
+        );
+    } catch (e) {
+        console.warn('react-native-maps not found:', e);
+        return (
+            <View style={[styles.container, styles.placeholder, { height }]}>
+                <Text style={styles.placeholderText}>Map Error</Text>
+                <Text style={styles.coordinates}>{lat.toFixed(4)}, {lng.toFixed(4)}</Text>
+            </View>
+        );
+    }
+}; // <--- Added missing closing brace here
+
+// Define your styles (make sure this exists)
 const styles = StyleSheet.create({
     container: {
-        width: '100%',
-        borderRadius: 12,
         overflow: 'hidden',
-        backgroundColor: COLORS.cardBackground,
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        borderRadius: 12,
+        backgroundColor: '#e0e0e0',
     },
     placeholder: {
         justifyContent: 'center',
         alignItems: 'center',
     },
     placeholderText: {
-        color: COLORS.text,
-        fontSize: 16,
         fontWeight: 'bold',
+        color: '#666',
     },
     coordinates: {
-        color: COLORS.textSecondary,
         fontSize: 12,
-        marginTop: 4,
-    },
+        color: '#888',
+    }
 });
 
-export default MapComponent;
+export default MapComponent; // <--- Moved outside the function

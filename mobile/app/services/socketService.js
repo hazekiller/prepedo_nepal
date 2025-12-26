@@ -86,6 +86,7 @@ class SocketService {
 
     // Booking updates
     this.socket.on('booking:new', (booking) => this.emit('booking:new', booking));
+    this.socket.on('booking:newOffer', (offer) => this.emit('booking:newOffer', offer));
     this.socket.on('booking:accepted', (booking) => this.emit('booking:accepted', booking));
     this.socket.on('booking:statusUpdated', (booking) => this.emit('booking:statusUpdated', booking));
     this.socket.on('booking:cancelled', (booking) => this.emit('booking:cancelled', booking));

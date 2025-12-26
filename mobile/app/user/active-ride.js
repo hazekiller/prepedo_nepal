@@ -34,6 +34,16 @@ export default function ActiveRideScreen() {
         }
       });
 
+      // Handle cancellation event
+      socket.on('booking:cancelled', (data) => {
+        console.log('❌ Booking cancelled:', data);
+        Alert.alert(
+          'Ride Cancelled',
+          `The ride was cancelled by ${data.cancelled_by === 'driver' ? 'the driver' : 'admin'}.`,
+          [{ text: 'OK', onPress: () => router.push('/user/home') }]
+        );
+      });
+
       socket.on('driver:locationUpdated', (coords) => {
         console.log('📍 Driver location update:', coords);
         setDriverLocation(coords);
@@ -46,6 +56,7 @@ export default function ActiveRideScreen() {
       if (socket) {
         socket.off('booking:statusUpdated');
         socket.off('driver:locationUpdated');
+        socket.off('booking:cancelled');
       }
     };
   }, [id]);
@@ -69,6 +80,41 @@ export default function ActiveRideScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelRide = () => {
+    Alert.alert(
+      'Cancel Ride',
+      'Are you sure you want to cancel this ride?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await axios.put(
+                `${API_BASE_URL}/api/bookings/${id}/cancel`,
+                { reason: 'User requested cancellation' },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+
+              if (!response.data.success) {
+                Alert.alert('Error', response.data.message || 'Failed to cancel ride');
+                return;
+              }
+
+              Alert.alert('Success', 'Ride cancelled successfully', [
+                { text: 'OK', onPress: () => router.push('/user/home') }
+              ]);
+            } catch (error) {
+              console.error('Cancel error:', error);
+              Alert.alert('Error', 'Failed to cancel ride');
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {
@@ -166,6 +212,12 @@ export default function ActiveRideScreen() {
               </View>
             </View>
           </View>
+
+          {ride.status !== 'completed' && ride.status !== 'cancelled' && (
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRide}>
+              <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </LinearGradient>
     </View>
@@ -205,4 +257,18 @@ const styles = StyleSheet.create({
   fareLabel: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 2 },
   paymentMethod: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
   fareValue: { color: COLORS.primary, fontWeight: '900', fontSize: 18 },
+  cancelButton: {
+    marginVertical: 20,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FF4B4B',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#FF4B4B',
+    fontWeight: '700',
+    fontSize: 16,
+  },
 });

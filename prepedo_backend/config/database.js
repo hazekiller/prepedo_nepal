@@ -89,6 +89,7 @@ const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS vehicles (
         id INT PRIMARY KEY AUTO_INCREMENT,
         driver_id INT NOT NULL,
+        vehicle_type ENUM('bike', 'car', 'taxi') NOT NULL,
         vehicle_number VARCHAR(50) UNIQUE NOT NULL,
         vehicle_model VARCHAR(100) NOT NULL,
         vehicle_color VARCHAR(50) NOT NULL,
@@ -103,7 +104,8 @@ const initializeDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE,
         INDEX idx_driver_id (driver_id),
-        INDEX idx_vehicle_number (vehicle_number)
+        INDEX idx_vehicle_number (vehicle_number),
+        INDEX idx_vehicle_type (vehicle_type)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 

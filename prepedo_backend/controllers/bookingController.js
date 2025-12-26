@@ -52,9 +52,9 @@ const calculateFare = (distance, vehicleType) => {
 
   totalFare *= multiplier;
 
-  // Simulate Traffic Congestion Factor (Small random variance for KTM unpredictability)
-  const trafficFactor = 0.95 + (Math.random() * 0.15); // 0.95 to 1.1 multiplier
-  totalFare *= trafficFactor;
+  // Traffic factor removed for consistent pricing
+  // const trafficFactor = 0.95 + (Math.random() * 0.15); 
+  // totalFare *= trafficFactor;
 
   return Math.round(totalFare);
 };
@@ -707,6 +707,18 @@ const cancelBooking = async (req, res) => {
 
     await connection.commit();
 
+    // Trigger socket notification
+    const socketHandler = req.app.get('socketHandler');
+    if (socketHandler) {
+      // Fetch updated booking reference to send via socket
+      /* We reuse the fetched booking object, but update status manually 
+         because transaction is committed but we need to send the event now. 
+         Ideally fetch again, but for speed we can patch the object. 
+      */
+      const cancelledBooking = { ...booking, status: 'cancelled', cancelled_by: cancelledBy, cancellation_reason: reason };
+      socketHandler.emitBookingCancelled(cancelledBooking, cancelledBy);
+    }
+
     res.json({
       success: true,
       message: 'Booking cancelled successfully'
@@ -818,6 +830,111 @@ const getFareEstimate = async (req, res) => {
   }
 };
 
+// @desc    Calculate distance between two coordinates in km
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+};
+
+const deg2rad = (deg) => {
+  return deg * (Math.PI / 180);
+};
+
+// @desc    Get booking quotes for all vehicle types
+// @route   POST /api/bookings/quotes
+// @access  Private (User)
+const getBookingQuotes = async (req, res) => {
+  try {
+    const { pickup_latitude, pickup_longitude, dropoff_latitude, dropoff_longitude } = req.body;
+    let { distance } = req.body;
+
+    // Calculate distance if not provided
+    if (!distance) {
+      if (!pickup_latitude || !pickup_longitude || !dropoff_latitude || !dropoff_longitude) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinates are required to calculate distance'
+        });
+      }
+      distance = calculateDistance(
+        parseFloat(pickup_latitude),
+        parseFloat(pickup_longitude),
+        parseFloat(dropoff_latitude),
+        parseFloat(dropoff_longitude)
+      );
+    }
+
+    // Ensure minimum distance of 1km for pricing
+    const billingDistance = Math.max(parseFloat(distance), 1);
+
+    // Vehicle types configuration
+    const vehicleTypes = [
+      {
+        id: 'bike',
+        name: 'Bike',
+        type: 'bike',
+        description: 'Fast & affordable',
+        capacity: 1,
+        image_url: 'https://cdn-icons-png.flaticon.com/512/3082/3082383.png'
+      },
+      {
+        id: 'car',
+        name: 'Car',
+        type: 'car',
+        description: 'Comfortable ride',
+        capacity: 4,
+        image_url: 'https://cdn-icons-png.flaticon.com/512/3082/3082365.png'
+      },
+      {
+        id: 'taxi',
+        name: 'Taxi',
+        type: 'taxi',
+        description: 'Traditional taxi service',
+        capacity: 4,
+        image_url: 'https://cdn-icons-png.flaticon.com/512/2555/2555013.png'
+      }
+    ];
+
+    // Calculate fare for each type
+    const quotes = vehicleTypes.map(vehicle => {
+      const fare = calculateFare(billingDistance, vehicle.type);
+
+      // Calculate simplified ETA (2 mins + 2 mins per km)
+      const etaMinutes = Math.round(2 + (billingDistance * 2));
+
+      return {
+        ...vehicle,
+        price: fare,
+        currency: 'NPR',
+        eta: `${etaMinutes} min`,
+        distance: parseFloat(billingDistance.toFixed(2))
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        distance: parseFloat(billingDistance.toFixed(2)),
+        quotes
+      }
+    });
+  } catch (error) {
+    console.error('Get quotes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get all vehicles
 // @route   GET /api/vehicles
 // @access  Public
@@ -830,9 +947,9 @@ const getVehicles = async (req, res) => {
       return res.json({
         success: true,
         data: [
-          { id: 1, name: 'Bike', type: 'bike', base_price: 50, price_per_km: 15, vehicle_model: 'Hero Splendor', vehicle_number: 'BA 1 PA 1234' },
-          { id: 2, name: 'Car', type: 'car', base_price: 150, price_per_km: 35, vehicle_model: 'Suzuki Swift', vehicle_number: 'BA 2 PA 5678' },
-          { id: 3, name: 'Taxi', type: 'taxi', base_price: 100, price_per_km: 40, vehicle_model: 'Maruti Alto', vehicle_number: 'BA 3 PA 9012' }
+          { id: 1, name: 'Bike', type: 'bike', base_price: 50, price_per_km: 15, vehicle_model: 'Hero Splendor', vehicle_number: 'BA 1 PA 1234', vehicle_type: 'bike' },
+          { id: 2, name: 'Car', type: 'car', base_price: 150, price_per_km: 35, vehicle_model: 'Suzuki Swift', vehicle_number: 'BA 2 PA 5678', vehicle_type: 'car' },
+          { id: 3, name: 'Taxi', type: 'taxi', base_price: 100, price_per_km: 40, vehicle_model: 'Maruti Alto', vehicle_number: 'BA 3 PA 9012', vehicle_type: 'taxi' }
         ]
       });
     }
@@ -1068,5 +1185,6 @@ module.exports = {
   getVehicles,
   createOffer,
   getBookingOffers,
-  selectDriver
+  selectDriver,
+  getBookingQuotes
 };

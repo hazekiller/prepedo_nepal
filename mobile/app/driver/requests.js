@@ -20,6 +20,13 @@ export default function RequestsScreen() {
   const [acceptingId, setAcceptingId] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
   const [driverStatus, setDriverStatus] = useState({ is_online: false, is_approved: false });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchAvailableBookings();
+    setRefreshing(false);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,8 +42,13 @@ export default function RequestsScreen() {
       console.log('📡 Socket connected in RequestsScreen, setting up listeners...');
 
       socketService.socket.on('booking:new', (newBooking) => {
+        if (!newBooking || !newBooking.id) return;
         console.log('🔔 New booking received:', newBooking.id);
-        setRequests(prev => [newBooking, ...prev]);
+        setRequests(prev => {
+          // Prevent duplicates
+          if (prev.some(r => r.id === newBooking.id)) return prev;
+          return [newBooking, ...prev];
+        });
       });
 
       socketService.socket.on('booking:taken', (data) => {
@@ -151,7 +163,15 @@ export default function RequestsScreen() {
 
         <FlatList
           data={requests}
-          keyExtractor={(item) => item.id.toString()}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]} // For Android
+            />
+          }
+          keyExtractor={(item) => (item && item.id ? item.id.toString() : Math.random().toString())}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.requestCard}>
@@ -181,7 +201,7 @@ export default function RequestsScreen() {
               <TouchableOpacity
                 style={[styles.acceptButton, item.offer_sent && styles.disabledButton]}
                 onPress={() => !item.offer_sent && handleSendOffer(item.id)}
-                disabled={acceptingId !== null || item.offer_sent}
+                disabled={acceptingId !== null || !!item.offer_sent}
               >
                 <LinearGradient
                   colors={item.offer_sent ? ['#444', '#333'] : [COLORS.primary, '#FFD700']}

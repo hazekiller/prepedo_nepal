@@ -33,27 +33,40 @@ export default function ActiveRideScreen() {
       fetchRideDetails(params.rideId);
     }
 
-    // Listen for ride updates via socket
-    if (socketService.socket) {
-      socketService.socket.on('booking:statusUpdated', handleRideUpdate);
-    }
+    let locationInterval;
 
-    // Simulate location updates for tracking verification
-    const locationInterval = setInterval(() => {
-      if (socketService.socket && params.rideId) {
-        // Emit simulated movement
-        socketService.socket.emit('driver:updateLocation', {
-          latitude: 27.7172 + (Math.random() * 0.01),
-          longitude: 85.3240 + (Math.random() * 0.01)
-        });
-      }
-    }, 5000);
+    if (socketService.socket) {
+      // Listen for ride updates via socket
+      socketService.socket.on('booking:statusUpdated', handleRideUpdate);
+
+      // Listen for cancellation
+      socketService.socket.on('booking:cancelled', (data) => {
+        console.log('❌ Booking cancelled:', data);
+        Alert.alert(
+          'Ride Cancelled',
+          `The ride was cancelled by ${data.cancelled_by === 'user' ? 'the passenger' : 'admin'}.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      });
+
+      // Simulate location updates for tracking verification
+      locationInterval = setInterval(() => {
+        if (params.rideId) {
+          // Emit simulated movement
+          socketService.socket.emit('driver:updateLocation', {
+            latitude: 27.7172 + (Math.random() * 0.01),
+            longitude: 85.3240 + (Math.random() * 0.01)
+          });
+        }
+      }, 5000);
+    }
 
     return () => {
       if (socketService.socket) {
         socketService.socket.off('booking:statusUpdated', handleRideUpdate);
+        socketService.socket.off('booking:cancelled');
       }
-      clearInterval(locationInterval);
+      if (locationInterval) clearInterval(locationInterval);
     };
   }, [params.rideId]);
 
@@ -190,6 +203,10 @@ export default function ActiveRideScreen() {
     );
   };
 
+
+
+  // ... (handleRideUpdate, updateStatusOnServer, etc.)
+
   const handleCancelRide = () => {
     Alert.alert(
       'Cancel Ride',
@@ -199,11 +216,25 @@ export default function ActiveRideScreen() {
         {
           text: 'Yes, Cancel',
           style: 'destructive',
-          onPress: () => {
-            if (socketService.socket) {
-              socketService.socket.emit('ride:cancel', { rideId: params.rideId });
+          onPress: async () => {
+            try {
+              const response = await axios.put(
+                `${API_BASE_URL}/api/bookings/${params.rideId}/cancel`,
+                { reason: 'Driver requested cancellation' },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+
+              if (response.data.success) {
+                Alert.alert('Success', 'Ride cancelled successfully', [
+                  { text: 'OK', onPress: () => router.back() }
+                ]);
+              } else {
+                Alert.alert('Error', response.data.message || 'Failed to cancel');
+              }
+            } catch (error) {
+              console.error('Cancel error:', error);
+              Alert.alert('Error', 'Failed to cancel ride');
             }
-            router.back();
           },
         },
       ]

@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import COLORS from './config/colors';
 import { loginUser } from './store/slices/authSlice';
+import socketService from './services/socketService';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -43,6 +44,9 @@ export default function LoginScreen() {
       // Dispatch login action
       const result = await dispatch(loginUser({ email, password })).unwrap();
       console.log('✅ Login successful:', result);
+
+      // Initialize socket connection
+      await socketService.connect();
 
       // Navigate based on role
       switch (result.user.role) {

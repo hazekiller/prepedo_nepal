@@ -43,19 +43,18 @@ class SocketHandler {
         socket.user = users[0];
 
         // If driver, get driver info
-        if (socket.user.role === 'driver') {
-          const [drivers] = await promisePool.query(
-            'SELECT id, is_approved, is_online FROM drivers WHERE user_id = ?',
-            [socket.user.id]
-          );
+        const [drivers] = await promisePool.query(
+          'SELECT id, is_approved, is_online, vehicle_type FROM drivers WHERE user_id = ?',
+          [socket.user.id]
+        );
 
-          if (drivers.length > 0) {
-            socket.driver = drivers[0];
-          }
+        if (drivers.length > 0) {
+          socket.driver = drivers[0];
         }
-
         console.log(`✅ Socket authenticated: ${socket.user.email} (${socket.user.role})`);
         next();
+
+
       } catch (error) {
         console.error('Socket authentication error:', error);
         next(new Error('Authentication failed'));
@@ -94,6 +93,9 @@ class SocketHandler {
       // Join online drivers room if approved and online
       if (driver.is_approved && driver.is_online) {
         socket.join('drivers:online');
+        if (driver.vehicle_type) {
+          socket.join(`drivers:online:${driver.vehicle_type.toLowerCase()}`);
+        }
       }
     }
 
@@ -191,6 +193,9 @@ class SocketHandler {
 
       // Join online drivers room
       socket.join('drivers:online');
+      if (driver.vehicle_type) {
+        socket.join(`drivers:online:${driver.vehicle_type.toLowerCase()}`);
+      }
 
       driver.is_online = true;
 
@@ -226,6 +231,9 @@ class SocketHandler {
 
       // Leave online drivers room
       socket.leave('drivers:online');
+      if (driver.vehicle_type) {
+        socket.leave(`drivers:online:${driver.vehicle_type.toLowerCase()}`);
+      }
 
       driver.is_online = false;
 
@@ -356,8 +364,15 @@ class SocketHandler {
    * Emit events
    */
   emitNewBookingToDrivers(booking) {
-    console.log(`📢 Broadcasting new booking ${booking.id} to online drivers`);
-    this.io.to('drivers:online').emit('booking:new', booking);
+    console.log(`📢 Broadcasting new booking ${booking.id} to online drivers (Type: ${booking.vehicle_type})`);
+
+    // Emit only to drivers of the requested vehicle type
+    if (booking.vehicle_type) {
+      this.io.to(`drivers:online:${booking.vehicle_type.toLowerCase()}`).emit('booking:new', booking);
+    } else {
+      // Fallback to all drivers if type not specified
+      this.io.to('drivers:online').emit('booking:new', booking);
+    }
   }
 
   emitBookingTaken(bookingId) {
@@ -376,6 +391,11 @@ class SocketHandler {
   emitNewOfferToUser(offer, userId) {
     console.log(`🔔 Notifying user ${userId} - new offer from driver ${offer.driver_name}`);
     this.io.to(`user:${userId}`).emit('booking:newOffer', offer);
+
+    // Also emit to booking room (fallback)
+    if (offer.booking_id) {
+      this.io.to(`booking:${offer.booking_id}`).emit('booking:newOffer', offer);
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from './config/colors'; // ✅ default import
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import socketService from './services/socketService';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,9 +25,15 @@ export default function RootLayout() {
         // Simulate preloading assets, fonts, etc.
         await new Promise(resolve => setTimeout(resolve, 1500));
 
+        // ...
+
         // Check if user is already logged in
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) setIsLoggedIn(true);
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          setIsLoggedIn(true);
+          // Initialize socket connection
+          await socketService.connect();
+        }
       } catch (e) {
         console.warn('Error during app initialization:', e);
       } finally {

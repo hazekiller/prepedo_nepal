@@ -13,10 +13,28 @@ const {
   getFareEstimate,
   createOffer,
   getBookingOffers,
-  selectDriver
+  selectDriver,
+  getBookingQuotes
 } = require('../controllers/bookingController');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
+
+// @route   POST /api/bookings/quotes
+// @desc    Get booking quotes (fare estimates) for vehicle types
+// @access  Private (User)
+router.post(
+  '/quotes',
+  [
+    verifyToken,
+    checkRole('user'),
+    body('pickup_latitude').isFloat().withMessage('Valid pickup latitude is required'),
+    body('pickup_longitude').isFloat().withMessage('Valid pickup longitude is required'),
+    body('dropoff_latitude').isFloat().withMessage('Valid dropoff latitude is required'),
+    body('dropoff_longitude').isFloat().withMessage('Valid dropoff longitude is required'),
+    handleValidationErrors
+  ],
+  getBookingQuotes
+);
 
 // @route   POST /api/bookings/calculate-fare
 // @desc    Calculate fare estimate
