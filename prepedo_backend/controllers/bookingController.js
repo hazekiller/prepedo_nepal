@@ -291,18 +291,18 @@ const getAvailableBookings = async (req, res) => {
     }
 
     const driver = drivers[0];
+    const status = {
+      is_approved: !!driver.is_approved,
+      is_online: !!driver.is_online
+    };
 
+    // We allow offline drivers to see the list, but not unapproved ones
     if (!driver.is_approved) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your driver account is not approved yet'
-      });
-    }
-
-    if (!driver.is_online) {
-      return res.status(403).json({
-        success: false,
-        message: 'You need to be online to view available bookings'
+      return res.status(200).json({
+        success: true,
+        data: [],
+        status: status,
+        message: 'Your driver account is pending approval. You will see requests once approved.'
       });
     }
 
@@ -322,7 +322,8 @@ const getAvailableBookings = async (req, res) => {
 
     res.json({
       success: true,
-      data: bookings
+      data: bookings,
+      status: status
     });
   } catch (error) {
     console.error('Get available bookings error:', error);
@@ -865,8 +866,14 @@ const createOffer = async (req, res) => {
     }
 
     const driver = drivers[0];
-    if (!driver.is_approved || !driver.is_online) {
-      return res.status(403).json({ success: false, message: 'You must be approved and online to offer rides' });
+    console.log(`🔍 [Offer Attempt] UserID: ${req.user.id}, DriverID: ${driver.id}, Online: ${driver.is_online}, Approved: ${driver.is_approved}`);
+
+    if (!driver.is_approved) {
+      return res.status(403).json({ success: false, message: 'Your account is not approved yet. Please contact admin.' });
+    }
+
+    if (!driver.is_online) {
+      return res.status(403).json({ success: false, message: 'You are currently offline. Please go online in the Status tab to send offers.' });
     }
 
     // Check if booking is still pending

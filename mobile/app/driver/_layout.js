@@ -2,8 +2,11 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import useSocket from "../hooks/useSocket";
 
 export default function DriverLayout() {
+  const { connected } = useSocket();
+  console.log('🔌 DriverLayout socket connected:', connected);
   return (
     <Tabs
       screenOptions={{

@@ -1,7 +1,7 @@
 // app/services/socketService.js
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ENV } from '../config/_env';
+import ENV from '../config/_env';
 
 class SocketService {
   constructor() {

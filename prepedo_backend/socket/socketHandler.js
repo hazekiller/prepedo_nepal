@@ -142,6 +142,19 @@ class SocketHandler {
     socket.on('booking:unsubscribe', (data) => this.handleUnsubscribeBooking(socket, data));
   }
 
+  getConnectedUsersCount() {
+    return this.userSockets.size;
+  }
+
+  getOnlineDriversCount() {
+    let count = 0;
+    const onlineDrivers = this.io.sockets.adapter.rooms.get('drivers:online');
+    if (onlineDrivers) {
+      count = onlineDrivers.size;
+    }
+    return count;
+  }
+
   /**
    * Handle socket disconnection
    */

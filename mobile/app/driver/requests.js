@@ -1,5 +1,6 @@
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, RefreshControl } from "react-native";
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,20 +8,32 @@ import axios from 'axios';
 import { COLORS } from '../config/colors';
 import { API_BASE_URL } from '../config/api';
 import socketService from '../services/socketService';
+import useSocket from '../hooks/useSocket';
 import MapComponent from '../components/shared/MapComponent';
 
 export default function RequestsScreen() {
   const router = useRouter();
   const { token } = useSelector((state) => state.auth);
-  const [requests, setRequests] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [acceptingId, setAcceptingId] = React.useState(null);
+  const { connected } = useSocket();
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [acceptingId, setAcceptingId] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [driverStatus, setDriverStatus] = useState({ is_online: false, is_approved: false });
 
-  React.useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchAvailableBookings();
+    }, [])
+  );
+
+  useEffect(() => {
     fetchAvailableBookings();
 
     // Listen for new bookings
-    if (socketService.socket) {
+    if (connected && socketService.socket) {
+      console.log('📡 Socket connected in RequestsScreen, setting up listeners...');
+
       socketService.socket.on('booking:new', (newBooking) => {
         console.log('🔔 New booking received:', newBooking.id);
         setRequests(prev => [newBooking, ...prev]);
@@ -30,14 +43,23 @@ export default function RequestsScreen() {
         console.log('🚫 Booking taken by another driver:', data.bookingId);
         setRequests(prev => prev.filter(r => r.id !== data.bookingId));
       });
+
+      socketService.socket.on('booking:assigned', (booking) => {
+        console.log('🚖 You have been assigned to booking:', booking.id);
+        Alert.alert('Success', 'You have been selected for this ride!', [
+          { text: 'View Ride', onPress: () => router.push(`/driver/active-ride?rideId=${booking.id}`) }
+        ]);
+      });
     }
 
     return () => {
       if (socketService.socket) {
         socketService.socket.off('booking:new');
+        socketService.socket.off('booking:taken');
+        socketService.socket.off('booking:assigned');
       }
     };
-  }, []);
+  }, [connected]);
 
   const fetchAvailableBookings = async () => {
     try {
@@ -46,7 +68,9 @@ export default function RequestsScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
-        setRequests(response.data.data.bookings);
+        setRequests(response.data.data.bookings || response.data.data);
+        setStatusMessage(response.data.message);
+        setDriverStatus(response.data.status || { is_online: false, is_approved: false });
       }
     } catch (error) {
       console.error('Fetch available bookings error:', error);
@@ -76,7 +100,16 @@ export default function RequestsScreen() {
       }
     } catch (error) {
       console.error('Send offer error:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to send offer');
+      const errorMsg = error.response?.data?.message || 'Failed to send offer';
+
+      if (error.response?.status === 403) {
+        Alert.alert('Access Denied', errorMsg, [
+          { text: 'Go to Status', onPress: () => router.push('/driver/toggle-status') },
+          { text: 'Cancel', style: 'cancel' }
+        ]);
+      } else {
+        Alert.alert('Error', errorMsg);
+      }
     } finally {
       setAcceptingId(null);
     }
@@ -93,6 +126,28 @@ export default function RequestsScreen() {
         <View style={styles.mapContainer}>
           <MapComponent height={200} />
         </View>
+
+        {statusMessage && (
+          <View style={styles.messageBanner}>
+            <Ionicons name="information-circle" size={20} color={COLORS.primary} />
+            <Text style={styles.messageText}>{statusMessage}</Text>
+          </View>
+        )}
+
+        {!driverStatus.is_online && driverStatus.is_approved && (
+          <View style={[styles.messageBanner, { backgroundColor: 'rgba(255, 107, 0, 0.1)', borderColor: COLORS.primary }]}>
+            <Ionicons name="warning" size={20} color={COLORS.primary} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.messageText, { marginLeft: 0 }]}>You are currently OFFLINE. Go online to send offers.</Text>
+              <TouchableOpacity
+                style={styles.goOnlineBtn}
+                onPress={() => router.push('/driver/toggle-status')}
+              >
+                <Text style={styles.goOnlineText}>GO ONLINE NOW</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         <FlatList
           data={requests}
@@ -156,6 +211,37 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 20 },
   heading: { fontSize: 28, fontWeight: "900", color: COLORS.primary },
   subheading: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
+  messageBanner: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+  },
+  messageText: {
+    color: '#fff',
+    fontSize: 13,
+    marginLeft: 10,
+    flex: 1,
+    fontWeight: '500',
+  },
+  goOnlineBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  goOnlineText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   mapContainer: { marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' },
   listContent: { paddingHorizontal: 20, paddingBottom: 40 },
   requestCard: {
