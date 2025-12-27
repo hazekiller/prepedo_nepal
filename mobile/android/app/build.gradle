@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.saalik.app'
+    namespace 'com.prepedo.nepal'
     defaultConfig {
-        applicationId 'com.saalik.app'
+        applicationId 'com.prepedo.nepal'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -17,7 +17,9 @@
       "url": "https://u.expo.dev/b1234567-89ab-4cde-9012-3456789fabcd",
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.prepedo.nepal",
@@ -33,7 +35,11 @@
       },
       "package": "com.prepedo.nepal",
       "versionCode": 1,
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,8 +48,15 @@
       "expo-router",
       "expo-font",
       "expo-splash-screen",
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
-    "owner": "hazekiller"
+    "owner": "sunabbaskota",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8beac17b-54ee-4d53-bfaf-6b5c3559d142"
+      }
+    }
   }
 }

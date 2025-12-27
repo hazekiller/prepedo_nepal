@@ -1,4 +1,4 @@
-package com.saalik.app
+package com.prepedo.nepal
 
 import android.app.Application
 import android.content.res.Configuration
