@@ -18,6 +18,7 @@ const server = http.createServer(app);
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : [
+    'https://prepedo.com',
     'http://localhost:8081',
     'http://192.168.1.68:8081',
     'http://localhost:19006',
@@ -127,19 +128,20 @@ const startServer = async () => {
     await initializeDatabase();
 
     server.listen(PORT, () => {
+      const displayHost = process.env.DOMAIN || 'localhost';
       console.log('\n' + '='.repeat(60));
       console.log('🚀 PREPEDO NEPAL - BACKEND SERVER STARTED!');
       console.log('='.repeat(60));
-      console.log(`📡 HTTP Server:    http://192.168.1.68:${PORT}`);
-      console.log(`⚡ Socket.io:      ws://192.168.1.68:${PORT}`);
+      console.log(`📡 HTTP Server:    http://${displayHost}:${PORT}`);
+      console.log(`⚡ Socket.io:      ws://${displayHost}:${PORT}`);
       console.log(`🌍 Environment:    ${process.env.NODE_ENV || 'development'}`);
       console.log(`📊 Database:       Connected`);
       console.log('='.repeat(60));
       console.log('📚 Available Endpoints:');
-      console.log(`   Health:         GET  http://192.168.1.68:${PORT}/`);
-      console.log(`   Socket Health:  GET  http://192.168.1.68:${PORT}/api/socket/health`);
-      console.log(`   Auth:           POST http://192.168.1.68:${PORT}/api/auth/login`);
-      console.log(`   Bookings:       POST http://192.168.1.68:${PORT}/api/bookings`);
+      console.log(`   Health:         GET  http://${displayHost}:${PORT}/`);
+      console.log(`   Socket Health:  GET  http://${displayHost}:${PORT}/api/socket/health`);
+      console.log(`   Auth:           POST http://${displayHost}:${PORT}/api/auth/login`);
+      console.log(`   Bookings:       POST http://${displayHost}:${PORT}/api/bookings`);
       console.log('='.repeat(60));
       console.log('✅ Server is ready to accept connections!\n');
     });
