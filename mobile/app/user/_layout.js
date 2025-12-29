@@ -3,9 +3,14 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../config/colors';
+import useRealTimeBookings from '../hooks/useRealTimeBookings';
 
 export default function UserTabsLayout() {
+  // Activate global background listener for ride updates
+  useRealTimeBookings('user');
+
   return (
     <Tabs
       screenOptions={{
@@ -26,7 +31,7 @@ export default function UserTabsLayout() {
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
             </View>
           ),
         }}
@@ -36,26 +41,33 @@ export default function UserTabsLayout() {
       <Tabs.Screen
         name="bookings"
         options={{
-          title: 'My Rides',
+          title: 'Rides',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons name={focused ? 'list' : 'list-outline'} size={24} color={color} />
+              <Ionicons name={focused ? 'time' : 'time-outline'} size={22} color={color} />
             </View>
           ),
         }}
       />
 
-      {/* Quick Book Center Tab */}
+      {/* Center Book Button */}
       <Tabs.Screen
         name="book"
         options={{
-          title: '',
+          title: 'Book',
           tabBarIcon: ({ focused }) => (
             <View style={styles.centerButton}>
-              <Ionicons name="add" size={32} color="#000" />
+              <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.centerGradient}>
+                <Ionicons name="add" size={32} color="#000" />
+              </LinearGradient>
             </View>
           ),
-          tabBarLabel: () => null,
+          tabBarLabelStyle: {
+            color: COLORS.primary,
+            fontWeight: '900',
+            fontSize: 10,
+            marginBottom: -2,
+          }
         }}
       />
 
@@ -66,7 +78,7 @@ export default function UserTabsLayout() {
           title: 'Fleet',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons name={focused ? 'car' : 'car-outline'} size={24} color={color} />
+              <Ionicons name={focused ? 'car' : 'car-outline'} size={22} color={color} />
             </View>
           ),
         }}
@@ -79,10 +91,20 @@ export default function UserTabsLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
             </View>
           ),
         }}
+      />
+
+      {/* Hidden Screens */}
+      <Tabs.Screen
+        name="settings"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="active-ride"
+        options={{ href: null }}
       />
     </Tabs>
   );
@@ -94,49 +116,48 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.cardBackground,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    height: Platform.OS === 'ios' ? 85 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 25 : 10,
-    paddingTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 10,
+    backgroundColor: '#111',
+    height: Platform.OS === 'ios' ? 90 : 70,
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowColor: 'transparent',
   },
   tabBarLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: Platform.OS === 'ios' ? 0 : 10,
   },
   tabBarItem: {
-    paddingVertical: 4,
+    height: 70,
+    paddingTop: 10,
   },
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 40,
-    height: 40,
   },
   iconContainerActive: {
     transform: [{ scale: 1.1 }],
   },
   centerButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.primary,
+    position: 'absolute',
+    top: -20,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#000', // Matches background to create the "notch" look
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -30,
+  },
+  centerGradient: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 12,
-    borderWidth: 4,
-    borderColor: COLORS.background,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
   },
 });

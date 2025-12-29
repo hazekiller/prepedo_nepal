@@ -38,7 +38,7 @@ export default function ToggleStatusScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
-        setIsOnline(response.data.data.is_online);
+        setIsOnline(!!response.data.data.is_online);
       }
     } catch (error) {
       console.error('Fetch driver status error:', error);
@@ -50,15 +50,27 @@ export default function ToggleStatusScreen() {
   const toggleOnlineStatus = async (value) => {
     if (!connected || !socketService.socket) {
       Alert.alert('Error', 'Connection not established. Please wait or check your internet.');
+      // Revert switch if connection failed
       return;
     }
 
-    if (value) {
-      console.log('📡 Going Online...');
-      socketService.socket.emit('driver:goOnline');
-    } else {
-      console.log('📡 Going Offline...');
-      socketService.socket.emit('driver:goOffline');
+    // Guard against multiple rapid toggles
+    if (loading) return;
+
+    try {
+      if (value) {
+        console.log('📡 Going Online...');
+        socketService.socket.emit('driver:goOnline');
+      } else {
+        console.log('📡 Going Offline...');
+        socketService.socket.emit('driver:goOffline');
+      }
+
+      // Optimitically update UI
+      setIsOnline(!!value);
+    } catch (error) {
+      console.error('Toggle status error:', error);
+      Alert.alert('Error', 'Failed to update status');
     }
   };
 

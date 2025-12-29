@@ -91,9 +91,9 @@ export default function DashboardScreen() {
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.userName}>{user?.full_name}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: stats?.overall?.is_online ? '#4CAF5020' : '#FF6B6B20' }]}>
-          <Text style={[styles.statusText, { color: stats?.overall?.is_online ? '#4CAF50' : '#FF6B6B' }]}>
-            {stats?.overall?.is_online ? 'ONLINE' : 'OFFLINE'}
+        <View style={[styles.statusBadge, { backgroundColor: !!stats?.overall?.is_online ? '#4CAF5020' : '#FF6B6B20' }]}>
+          <Text style={[styles.statusText, { color: !!stats?.overall?.is_online ? '#4CAF50' : '#FF6B6B' }]}>
+            {!!stats?.overall?.is_online ? 'ONLINE' : 'OFFLINE'}
           </Text>
         </View>
       </View>

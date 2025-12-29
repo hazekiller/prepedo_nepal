@@ -145,7 +145,17 @@ export default function ReviewBookingScreen() {
           <Text style={styles.title}>Review Your Booking</Text>
           <Text style={styles.subtitle}>Please confirm all details before proceeding</Text>
           <View style={{ marginTop: 20 }}>
-            <MapComponent height={180} />
+            <MapComponent
+              height={180}
+              pickup={{
+                latitude: parseFloat(pickupLatitude),
+                longitude: parseFloat(pickupLongitude)
+              }}
+              dropoff={{
+                latitude: parseFloat(dropoffLatitude),
+                longitude: parseFloat(dropoffLongitude)
+              }}
+            />
           </View>
         </View>
 

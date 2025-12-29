@@ -3,9 +3,13 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import useSocket from "../hooks/useSocket";
+import useRealTimeBookings from "../hooks/useRealTimeBookings";
 
 export default function DriverLayout() {
   const { connected } = useSocket();
+  // Activate global background listener for new ride requests
+  useRealTimeBookings('driver');
+
   console.log('🔌 DriverLayout socket connected:', connected);
   return (
     <Tabs

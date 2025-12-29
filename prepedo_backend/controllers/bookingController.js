@@ -1,13 +1,14 @@
 const { promisePool } = require('../config/database');
 
-// Helper function to calculate fare with KTM Valley Specialized Algorithm
+// Helper function to calculate fare based on Haversine distance
 const calculateFare = (distance, vehicleType) => {
   let baseFare, perKmFare;
+  const bookingFee = 30; // Premium service booking fee
 
   // KTM Valley specific base rates (Premium Service)
   switch (vehicleType) {
     case 'bike':
-      baseFare = parseFloat(process.env.BASE_FARE_BIKE) || 60; // Increased for KTM
+      baseFare = parseFloat(process.env.BASE_FARE_BIKE) || 60;
       perKmFare = parseFloat(process.env.PER_KM_FARE_BIKE) || 18;
       break;
     case 'car':
@@ -23,9 +24,10 @@ const calculateFare = (distance, vehicleType) => {
       perKmFare = 18;
   }
 
-  let totalFare = baseFare + (distance * perKmFare);
+  // Calculate fare using distance (already calculated via Haversine)
+  let totalFare = baseFare + (distance * perKmFare) + bookingFee;
 
-  // KTM Valley Rush Hour Multiplier Logic
+  // KTM Valley Surge Multiplier (Rush Hour & Night)
   const now = new Date();
   const hour = now.getHours();
   const day = now.getDay();
@@ -36,8 +38,8 @@ const calculateFare = (distance, vehicleType) => {
   if (hour >= 8 && hour < 11) {
     multiplier = 1.35;
   }
-  // Evening Rush (4:30 PM - 7:30 PM)
-  else if (hour >= 16 && (hour < 19 || (hour === 19 && now.getMinutes() < 30))) {
+  // Evening Rush (4:30 PM - 8:00 PM)
+  else if (hour >= 16 && hour < 20) {
     multiplier = 1.5;
   }
   // Late Night (10:00 PM - 5:00 AM)
@@ -45,16 +47,12 @@ const calculateFare = (distance, vehicleType) => {
     multiplier = 1.4;
   }
 
-  // Weekend adjustment (Saturday is the main weekend in Nepal)
+  // Saturday adjustment
   if (day === 6) {
-    multiplier *= 0.9; // Slightly lower demand on Saturdays in some areas
+    multiplier *= 0.95;
   }
 
   totalFare *= multiplier;
-
-  // Traffic factor removed for consistent pricing
-  // const trafficFactor = 0.95 + (Math.random() * 0.15); 
-  // totalFare *= trafficFactor;
 
   return Math.round(totalFare);
 };
@@ -212,6 +210,7 @@ const getBookingById = async (req, res) => {
         d.id as driver_id,
         du.full_name as driver_name, du.phone as driver_phone,
         dr.rating as driver_rating, dr.vehicle_type,
+        dr.current_latitude as driver_latitude, dr.current_longitude as driver_longitude,
         v.vehicle_number, v.vehicle_model, v.vehicle_color, v.vehicle_year,
         r.rating as user_rating, r.review
       FROM bookings b
@@ -308,19 +307,29 @@ const getAvailableBookings = async (req, res) => {
 
     // Get pending bookings matching driver's vehicle type
     // Also check if this driver has already sent an offer
+    // Filter by proximity (10km radius) if driver location is known
     const [bookings] = await promisePool.query(
       `SELECT 
         b.*,
         u.full_name as user_name, u.phone as user_phone,
-        CASE WHEN bo.id IS NOT NULL THEN TRUE ELSE FALSE END as offer_sent
+        CASE WHEN bo.id IS NOT NULL THEN TRUE ELSE FALSE END as offer_sent,
+        (6371 * acos(
+          cos(radians(?)) * cos(radians(b.pickup_latitude)) * 
+          cos(radians(b.pickup_longitude) - radians(?)) + 
+          sin(radians(?)) * sin(radians(b.pickup_latitude))
+        )) AS distance_to_pickup
       FROM bookings b
       INNER JOIN users u ON b.user_id = u.id
       LEFT JOIN booking_offers bo ON b.id = bo.booking_id AND bo.driver_id = ?
       WHERE b.status = 'pending' 
         AND b.vehicle_type = ?
-      ORDER BY b.created_at DESC
+      HAVING distance_to_pickup IS NULL OR distance_to_pickup < 30
+      ORDER BY distance_to_pickup ASC, b.created_at DESC
       LIMIT 20`,
-      [driver.id, driver.vehicle_type]
+      [
+        driver.current_latitude, driver.current_longitude, driver.current_latitude,
+        driver.id, driver.vehicle_type
+      ]
     );
 
     res.json({
@@ -603,6 +612,12 @@ const updateBookingStatus = async (req, res) => {
       WHERE b.id = ?`,
       [bookingId]
     );
+
+    // Trigger socket notification
+    const socketHandler = req.app.get('socketHandler');
+    if (socketHandler) {
+      socketHandler.emitBookingStatusUpdate(updatedBooking[0]);
+    }
 
     res.json({
       success: true,

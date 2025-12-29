@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import socketService from '../services/socketService';
+import useSocket from '../hooks/useSocket';
 import { COLORS } from '../config/colors';
 import { API_BASE_URL } from '../config/api';
 import MapComponent from '../components/shared/MapComponent';
@@ -14,17 +15,22 @@ export default function ActiveRideScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { token } = useSelector((state) => state.auth);
+  const { connected } = useSocket();
   const [ride, setRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    fetchRideDetails();
+  }, [id]);
+
+  useEffect(() => {
     const socket = socketService.socket;
-    if (socket && id) {
+    if (socket && id && connected) {
       console.log('📌 Subscribing to ride updates:', id);
       socket.emit('booking:subscribe', { bookingId: id });
 
-      socket.on('booking:statusUpdated', (data) => {
+      const onStatusUpdate = (data) => {
         console.log('🔄 Ride status updated:', data.status);
         setRide(prev => ({ ...prev, ...data }));
         if (data.status === 'completed') {
@@ -32,34 +38,33 @@ export default function ActiveRideScreen() {
             { text: 'OK', onPress: () => router.push('/user/home') }
           ]);
         }
-      });
+      };
 
-      // Handle cancellation event
-      socket.on('booking:cancelled', (data) => {
+      const onCancelled = (data) => {
         console.log('❌ Booking cancelled:', data);
         Alert.alert(
           'Ride Cancelled',
           `The ride was cancelled by ${data.cancelled_by === 'driver' ? 'the driver' : 'admin'}.`,
           [{ text: 'OK', onPress: () => router.push('/user/home') }]
         );
-      });
+      };
 
-      socket.on('driver:locationUpdated', (coords) => {
+      const onLocationUpdate = (coords) => {
         console.log('📍 Driver location update:', coords);
         setDriverLocation(coords);
-      });
+      };
+
+      socket.on('booking:statusUpdated', onStatusUpdate);
+      socket.on('booking:cancelled', onCancelled);
+      socket.on('driver:locationUpdated', onLocationUpdate);
+
+      return () => {
+        socket.off('booking:statusUpdated', onStatusUpdate);
+        socket.off('booking:cancelled', onCancelled);
+        socket.off('driver:locationUpdated', onLocationUpdate);
+      };
     }
-
-    fetchRideDetails();
-
-    return () => {
-      if (socket) {
-        socket.off('booking:statusUpdated');
-        socket.off('driver:locationUpdated');
-        socket.off('booking:cancelled');
-      }
-    };
-  }, [id]);
+  }, [id, connected]);
 
   const fetchRideDetails = async () => {
     try {
@@ -70,7 +75,14 @@ export default function ActiveRideScreen() {
       });
 
       if (response.data.success) {
-        setRide(response.data.data);
+        const rideData = response.data.data;
+        setRide(rideData);
+        if (rideData.driver_latitude && rideData.driver_longitude) {
+          setDriverLocation({
+            latitude: parseFloat(rideData.driver_latitude),
+            longitude: parseFloat(rideData.driver_longitude)
+          });
+        }
       } else {
         Alert.alert('Error', 'Could not fetch ride details');
       }
@@ -151,17 +163,38 @@ export default function ActiveRideScreen() {
 
         <MapComponent
           height={300}
-          latitude={driverLocation?.latitude || 27.7172}
-          longitude={driverLocation?.longitude || 85.3240}
+          pickup={ride ? {
+            latitude: parseFloat(ride.pickup_latitude),
+            longitude: parseFloat(ride.pickup_longitude)
+          } : null}
+          dropoff={ride ? {
+            latitude: parseFloat(ride.dropoff_latitude),
+            longitude: parseFloat(ride.dropoff_longitude)
+          } : null}
+          driver={driverLocation}
+          origin={driverLocation}
+          destination={ride && (ride.status === 'accepted' || ride.status === 'arrived') ? {
+            latitude: parseFloat(ride.pickup_latitude),
+            longitude: parseFloat(ride.pickup_longitude)
+          } : ride ? {
+            latitude: parseFloat(ride.dropoff_latitude),
+            longitude: parseFloat(ride.dropoff_longitude)
+          } : null}
         />
 
-        <ScrollView style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 60 }}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.statusBanner}>
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>
-              {ride.status === 'accepted' ? 'Driver is coming to you' :
-                ride.status === 'started' ? 'On your way to destination' :
-                  ride.status.toUpperCase()}
+              {ride.status === 'accepted' && 'Driver is coming to you'}
+              {ride.status === 'arrived' && 'Driver has arrived at pickup!'}
+              {ride.status === 'started' && 'Ride in progress'}
+              {ride.status === 'completed' && 'Ride completed'}
+              {ride.status === 'cancelled' && 'Ride cancelled'}
             </Text>
           </View>
 
@@ -213,7 +246,8 @@ export default function ActiveRideScreen() {
             </View>
           </View>
 
-          {ride.status !== 'completed' && ride.status !== 'cancelled' && (
+          {/* Only allow cancellation if ride hasn't arrived/started yet */}
+          {['pending', 'accepted'].includes(ride.status) && (
             <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRide}>
               <Text style={styles.cancelButtonText}>Cancel Ride</Text>
             </TouchableOpacity>

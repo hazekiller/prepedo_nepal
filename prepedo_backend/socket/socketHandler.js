@@ -191,7 +191,6 @@ class SocketHandler {
         [driver.id]
       );
 
-      // Join online drivers room
       socket.join('drivers:online');
       if (driver.vehicle_type) {
         socket.join(`drivers:online:${driver.vehicle_type.toLowerCase()}`);
@@ -199,7 +198,8 @@ class SocketHandler {
 
       driver.is_online = true;
 
-      socket.emit('driver:statusUpdated', {
+      // Notify all driver's devices
+      this.io.to(`user:${socket.user.id}`).emit('driver:statusUpdated', {
         success: true,
         isOnline: true,
         message: 'You are now online',
@@ -237,7 +237,8 @@ class SocketHandler {
 
       driver.is_online = false;
 
-      socket.emit('driver:statusUpdated', {
+      // Notify all driver's devices
+      this.io.to(`user:${socket.user.id}`).emit('driver:statusUpdated', {
         success: true,
         isOnline: false,
         message: 'You are now offline',
@@ -363,16 +364,67 @@ class SocketHandler {
   /**
    * Emit events
    */
-  emitNewBookingToDrivers(booking) {
-    console.log(`📢 Broadcasting new booking ${booking.id} to online drivers (Type: ${booking.vehicle_type})`);
+  async emitNewBookingToDrivers(booking) {
+    try {
+      console.log(`📢 Calculating nearby drivers for booking ${booking.id} (Type: ${booking.vehicle_type}) at [${booking.pickup_latitude}, ${booking.pickup_longitude}]`);
 
-    // Emit only to drivers of the requested vehicle type
-    if (booking.vehicle_type) {
-      this.io.to(`drivers:online:${booking.vehicle_type.toLowerCase()}`).emit('booking:new', booking);
-    } else {
-      // Fallback to all drivers if type not specified
-      this.io.to('drivers:online').emit('booking:new', booking);
+      // Find online approved drivers of the same vehicle type
+      const [drivers] = await promisePool.query(
+        `SELECT id, current_latitude, current_longitude FROM drivers 
+         WHERE is_online = true AND is_approved = true AND vehicle_type = ?`,
+        [booking.vehicle_type]
+      );
+
+      console.log(`🔍 Found ${drivers.length} online approved ${booking.vehicle_type} drivers`);
+
+      let notifiedCount = 0;
+
+      for (const driver of drivers) {
+        let shouldNotify = true;
+        let distance = null;
+
+        // If driver has location, check distance (30km radius for better coverage)
+        if (driver.current_latitude && driver.current_longitude) {
+          distance = this.calculateDistance(
+            parseFloat(booking.pickup_latitude),
+            parseFloat(booking.pickup_longitude),
+            parseFloat(driver.current_latitude),
+            parseFloat(driver.current_longitude)
+          );
+
+          if (distance > 30) {
+            shouldNotify = false;
+          }
+        }
+
+        if (shouldNotify) {
+          this.io.to(`driver:${driver.id}`).emit('booking:new', booking);
+          notifiedCount++;
+          console.log(`✅ Notifying Driver ${driver.id} (Distance: ${distance ? distance.toFixed(2) + 'km' : 'Unknown'})`);
+        } else {
+          console.log(`⏭️ Skipping Driver ${driver.id} (Distance: ${distance.toFixed(2)}km - too far)`);
+        }
+      }
+
+      console.log(`🏁 Notification broadcast complete. Notified ${notifiedCount} drivers.`);
+    } catch (error) {
+      console.error('emitNewBookingToDrivers error:', error);
     }
+  }
+
+  /**
+   * Helper: Calculate distance between two points in KM (Haversine)
+   */
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 
   emitBookingTaken(bookingId) {

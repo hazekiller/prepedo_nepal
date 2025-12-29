@@ -1,48 +1,68 @@
 // app/services/notificationService.js
-import * as Notifications from 'expo-notifications';
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 
 // safe notification wrapper
-const isRunningInExpoGo = Constants.appOwnership === 'expo'; // expo go
-const supportsRemotePush = !isRunningInExpoGo; // remote push not available in Expo Go
+const isRunningInExpoGo = Constants.appOwnership === 'expo';
+
+// helper to get Notifications safely
+const getNotifications = () => {
+  try {
+    return require('expo-notifications');
+  } catch (e) {
+    console.warn('expo-notifications not available');
+    return null;
+  }
+};
 
 // Configure behaviour for showing notifications in-app
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+try {
+  const Notifications = getNotifications();
+  if (Notifications && Notifications.setNotificationHandler) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  }
+} catch (e) {
+  console.log('Notification handler skipped:', e.message);
+}
 
 export async function showLocalNotification(title, body) {
   try {
     if (!title && !body) return;
 
-    // schedule immediate local notification (works in Expo Go)
-    await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true, priority: 'high' },
-      trigger: null,
-    });
+    const Notifications = getNotifications();
+    if (Notifications && Notifications.scheduleNotificationAsync) {
+      // schedule immediate local notification
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: true, priority: 'high' },
+        trigger: null,
+      });
+    } else {
+      throw new Error('Notifications module not available');
+    }
   } catch (err) {
-    console.warn('showLocalNotification fallback to Alert', err);
-    Alert.alert(title || 'Notification', body || '');
+    console.log('Notification suppressed (Expo Go fallback):', title, body);
+    // In many cases, we don't want to show an Alert for every background update
+    // But for critical ones, we could:
+    // Alert.alert(title || 'Notification', body || '');
   }
 }
 
 export async function getExpoPushTokenIfAvailable() {
-  // Only attempt token registration on dev client or standalone builds
   try {
-    if (!supportsRemotePush) {
-      console.warn('Remote push not supported in Expo Go — use dev build or standalone.');
+    const Notifications = getNotifications();
+    if (!Notifications || isRunningInExpoGo) {
       return null;
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync();
     return tokenData?.data ?? null;
   } catch (err) {
-    console.error('getExpoPushTokenIfAvailable error', err);
     return null;
   }
 }

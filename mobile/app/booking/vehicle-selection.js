@@ -121,7 +121,17 @@ export default function VehicleSelectionScreen() {
             Best prices for your trip to {dropoffLocation || 'Destination'}
           </Text>
           <View style={{ marginTop: 16 }}>
-            <MapComponent height={150} />
+            <MapComponent
+              height={180}
+              pickup={{
+                latitude: parseFloat(pickupLatitude),
+                longitude: parseFloat(pickupLongitude)
+              }}
+              dropoff={{
+                latitude: parseFloat(dropoffLatitude),
+                longitude: parseFloat(dropoffLongitude)
+              }}
+            />
           </View>
         </View>
 

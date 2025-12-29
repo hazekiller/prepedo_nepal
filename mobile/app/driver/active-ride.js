@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSelector } from 'react-redux';
@@ -15,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import COLORS from '../config/colors';
 import socketService from '../services/socketService';
+import useSocket from '../hooks/useSocket';
 import { API_BASE_URL } from '../config/api';
 import MapComponent from '../components/shared/MapComponent';
 
@@ -26,49 +30,73 @@ export default function ActiveRideScreen() {
   const [ride, setRide] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rideStatus, setRideStatus] = useState('accepted'); // accepted, arrived, started, completed
+  const [currentLocation, setCurrentLocation] = useState(null);
+
+  const { connected } = useSocket();
 
   useEffect(() => {
-    // Get ride data from params or fetch from server
     if (params.rideId) {
-      fetchRideDetails(params.rideId);
+      if (token) {
+        fetchRideDetails(params.rideId);
+      }
+    } else {
+      setLoading(false);
     }
+  }, [params.rideId, token]);
 
+  useEffect(() => {
     let locationInterval;
+    const socket = socketService.socket;
 
-    if (socketService.socket) {
-      // Listen for ride updates via socket
-      socketService.socket.on('booking:statusUpdated', handleRideUpdate);
+    if (socket && params.rideId && connected) {
+      console.log('📌 Driver subscribing to ride room:', params.rideId);
+      socket.emit('booking:subscribe', { bookingId: params.rideId });
 
-      // Listen for cancellation
-      socketService.socket.on('booking:cancelled', (data) => {
+      socket.on('booking:statusUpdated', handleRideUpdate);
+
+      const onCancelled = (data) => {
         console.log('❌ Booking cancelled:', data);
         Alert.alert(
           'Ride Cancelled',
           `The ride was cancelled by ${data.cancelled_by === 'user' ? 'the passenger' : 'admin'}.`,
           [{ text: 'OK', onPress: () => router.back() }]
         );
-      });
+      };
+
+      socket.on('booking:cancelled', onCancelled);
 
       // Simulate location updates for tracking verification
       locationInterval = setInterval(() => {
-        if (params.rideId) {
-          // Emit simulated movement
-          socketService.socket.emit('driver:updateLocation', {
-            latitude: 27.7172 + (Math.random() * 0.01),
-            longitude: 85.3240 + (Math.random() * 0.01)
+        if (ride) {
+          const isGoingToPickup = ['accepted', 'arrived'].includes(rideStatus);
+          const targetLat = isGoingToPickup ? parseFloat(ride.pickupLatitude) : parseFloat(ride.dropoffLatitude);
+          const targetLon = isGoingToPickup ? parseFloat(ride.pickupLongitude) : parseFloat(ride.dropoffLongitude);
+
+          setCurrentLocation(prev => {
+            if (!prev) {
+              return {
+                latitude: targetLat + (Math.random() * 0.005 - 0.0025),
+                longitude: targetLon + (Math.random() * 0.005 - 0.0025)
+              };
+            }
+
+            const newLat = prev.latitude + (targetLat - prev.latitude) * 0.1;
+            const newLon = prev.longitude + (targetLon - prev.longitude) * 0.1;
+
+            const newPos = { latitude: newLat, longitude: newLon };
+            socket.emit('driver:updateLocation', newPos);
+            return newPos;
           });
         }
       }, 5000);
-    }
 
-    return () => {
-      if (socketService.socket) {
-        socketService.socket.off('booking:statusUpdated', handleRideUpdate);
-        socketService.socket.off('booking:cancelled');
-      }
-      if (locationInterval) clearInterval(locationInterval);
-    };
-  }, [params.rideId]);
+      return () => {
+        socket.off('booking:statusUpdated', handleRideUpdate);
+        socket.off('booking:cancelled', onCancelled);
+        if (locationInterval) clearInterval(locationInterval);
+      };
+    }
+  }, [params.rideId, connected, !!ride, rideStatus]); // Added ride and rideStatus to dependencies for simulation
 
   const fetchRideDetails = async (rideId) => {
     try {
@@ -85,13 +113,20 @@ export default function ActiveRideScreen() {
           passengerName: data.user_name,
           passengerPhone: data.user_phone,
           pickupLocation: data.pickup_location,
+          pickupLatitude: data.pickup_latitude,
+          pickupLongitude: data.pickup_longitude,
           dropoffLocation: data.dropoff_location,
+          dropoffLatitude: data.dropoff_latitude,
+          dropoffLongitude: data.dropoff_longitude,
           estimatedFare: data.estimated_fare,
           distance: `${data.distance} km`,
-          duration: 'Calculating...', // API doesn't provide this yet
+          duration: 'Calculating...',
           status: data.status,
         });
-        setRideStatus(data.status);
+        setRideStatus(prev => {
+          if (prev === 'arriving' && data.status === 'started') return prev;
+          return data.status;
+        });
       }
     } catch (error) {
       console.error('Error fetching ride:', error);
@@ -101,13 +136,21 @@ export default function ActiveRideScreen() {
     }
   };
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const handleRideUpdate = (data) => {
-    if (data.rideId === params.rideId) {
-      setRideStatus(data.status);
+    if (data.id === params.rideId || data.rideId === params.rideId) {
+      // Don't revert to 'started' if we are already in 'arriving' state locally
+      setRideStatus(prev => {
+        if (prev === 'arriving' && data.status === 'started') return prev;
+        return data.status;
+      });
     }
   };
 
   const updateStatusOnServer = async (newStatus) => {
+    if (isUpdating) return false;
+    setIsUpdating(true);
     try {
       const response = await axios.put(
         `${API_BASE_URL}/api/bookings/${params.rideId}/status`,
@@ -123,6 +166,8 @@ export default function ActiveRideScreen() {
       console.error('Update status error:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to update status');
       return false;
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -134,12 +179,7 @@ export default function ActiveRideScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Start',
-          onPress: async () => {
-            const success = await updateStatusOnServer('started');
-            if (success) {
-              // Status updated via HTTP, socket notification will follow from server
-            }
-          },
+          onPress: () => updateStatusOnServer('started'),
         },
       ]
     );
@@ -153,9 +193,7 @@ export default function ActiveRideScreen() {
         { text: 'No', style: 'cancel' },
         {
           text: 'Yes',
-          onPress: async () => {
-            await updateStatusOnServer('arrived');
-          },
+          onPress: () => updateStatusOnServer('arrived'),
         },
       ]
     );
@@ -170,11 +208,7 @@ export default function ActiveRideScreen() {
         {
           text: 'Yes',
           onPress: () => {
-            // Note: The UI shows "arriving" status which isn't in DB enum, 
-            // but we use "arrived" button to transition to "completed" usually.
-            // Let's stick to the DB enum: 'arrived', 'started', 'completed'.
-            // If the UI needs an intermediate "almost there" state, we'd need DB change.
-            // For now, let's just keep the local state for UI and wait for final completion.
+            // Only local status change for UI flow
             setRideStatus('arriving');
           },
         },
@@ -252,6 +286,28 @@ export default function ActiveRideScreen() {
     );
   };
 
+  const handleNavigate = () => {
+    if (!ride) return;
+
+    const lat = rideStatus === 'accepted' ? ride.pickupLatitude : ride.dropoffLatitude;
+    const lon = rideStatus === 'accepted' ? ride.pickupLongitude : ride.dropoffLongitude;
+    const label = rideStatus === 'accepted' ? 'Pickup Location' : 'Dropoff Location';
+
+    const url = Platform.select({
+      ios: `maps:0,0?q=${label}@${lat},${lon}`,
+      android: `geo:0,0?q=${lat},${lon}(${label})`,
+    });
+
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+        Linking.openURL(browserUrl);
+      }
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -304,109 +360,176 @@ export default function ActiveRideScreen() {
           </Text>
         </View>
 
-        <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
-          <MapComponent height={220} />
-        </View>
-
-        {/* Passenger Info */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Passenger Details</Text>
-          <View style={styles.infoRow}>
-            <Ionicons name="person" size={20} color={COLORS.primary} />
-            <Text style={styles.infoText}>{ride.passengerName}</Text>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {/* Main Map View */}
+          <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
+            <MapComponent
+              height={260}
+              pickup={{
+                latitude: parseFloat(ride.pickupLatitude),
+                longitude: parseFloat(ride.pickupLongitude)
+              }}
+              dropoff={{
+                latitude: parseFloat(ride.dropoffLatitude),
+                longitude: parseFloat(ride.dropoffLongitude)
+              }}
+              driver={currentLocation}
+              origin={currentLocation}
+              destination={(rideStatus === 'accepted' || rideStatus === 'arrived') ? {
+                latitude: parseFloat(ride.pickupLatitude),
+                longitude: parseFloat(ride.pickupLongitude)
+              } : {
+                latitude: parseFloat(ride.dropoffLatitude),
+                longitude: parseFloat(ride.dropoffLongitude)
+              }}
+            />
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="call" size={20} color={COLORS.primary} />
-            <Text style={styles.infoText}>{ride.passengerPhone}</Text>
-          </View>
-          <TouchableOpacity style={styles.contactButton} onPress={handleContactPassenger}>
-            <Text style={styles.contactButtonText}>Contact Passenger</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Route Info */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Route Information</Text>
-          <View style={styles.routeItem}>
-            <Ionicons name="location" size={20} color={COLORS.primary} />
-            <View style={styles.routeInfo}>
-              <Text style={styles.routeLabel}>Pickup</Text>
-              <Text style={styles.routeText}>{ride.pickupLocation}</Text>
+          {/* Passenger Info */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Passenger Details</Text>
+            <View style={styles.infoRow}>
+              <Ionicons name="person" size={20} color={COLORS.primary} />
+              <Text style={styles.infoText}>{ride.passengerName}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="call" size={20} color={COLORS.primary} />
+              <Text style={styles.infoText}>{ride.passengerPhone}</Text>
+            </View>
+            <TouchableOpacity style={styles.contactButton} onPress={handleContactPassenger}>
+              <Text style={styles.contactButtonText}>Contact Passenger</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Route Info */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Route Information</Text>
+            <View style={styles.routeItem}>
+              <Ionicons name="location" size={20} color={COLORS.primary} />
+              <View style={styles.routeInfo}>
+                <Text style={styles.routeLabel}>Pickup</Text>
+                <Text style={styles.routeText}>{ride.pickupLocation}</Text>
+              </View>
+            </View>
+            <View style={styles.routeLine} />
+            <View style={styles.routeItem}>
+              <Ionicons name="flag" size={20} color="#FF6B6B" />
+              <View style={styles.routeInfo}>
+                <Text style={styles.routeLabel}>Drop-off</Text>
+                <Text style={styles.routeText}>{ride.dropoffLocation}</Text>
+              </View>
             </View>
           </View>
-          <View style={styles.routeLine} />
-          <View style={styles.routeItem}>
-            <Ionicons name="flag" size={20} color="#FF6B6B" />
-            <View style={styles.routeInfo}>
-              <Text style={styles.routeLabel}>Drop-off</Text>
-              <Text style={styles.routeText}>{ride.dropoffLocation}</Text>
+
+          {/* Trip Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="navigate" size={24} color={COLORS.primary} />
+              <Text style={styles.statLabel}>Distance</Text>
+              <Text style={styles.statValue}>{ride.distance}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="time" size={24} color={COLORS.primary} />
+              <Text style={styles.statLabel}>Duration</Text>
+              <Text style={styles.statValue}>{ride.duration}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="cash" size={24} color={COLORS.primary} />
+              <Text style={styles.statLabel}>Fare</Text>
+              <Text style={styles.statValue}>NPR {ride.estimatedFare}</Text>
             </View>
           </View>
-        </View>
 
-        {/* Trip Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Ionicons name="navigate" size={24} color={COLORS.primary} />
-            <Text style={styles.statLabel}>Distance</Text>
-            <Text style={styles.statValue}>{ride.distance}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="time" size={24} color={COLORS.primary} />
-            <Text style={styles.statLabel}>Duration</Text>
-            <Text style={styles.statValue}>{ride.duration}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="cash" size={24} color={COLORS.primary} />
-            <Text style={styles.statLabel}>Fare</Text>
-            <Text style={styles.statValue}>NPR {ride.estimatedFare}</Text>
-          </View>
-        </View>
+          {/* Action Buttons */}
+          <View style={styles.actionsContainer}>
+            {rideStatus !== 'completed' && (
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginBottom: 16, borderColor: '#4A90E2', borderWidth: 1 }]}
+                onPress={handleNavigate}
+                disabled={isUpdating}
+              >
+                <LinearGradient colors={['#1e3a8a', '#1e40af']} style={styles.buttonGradient}>
+                  <Text style={[styles.primaryButtonText, { color: '#fff' }]}>
+                    {rideStatus === 'accepted' || rideStatus === 'arrived' ? 'Navigate to Pickup' : 'Navigate to Dropoff'}
+                  </Text>
+                  <Ionicons name="navigate-circle" size={24} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          {rideStatus === 'accepted' && (
-            <View>
-              <TouchableOpacity style={[styles.primaryButton, { marginBottom: 12 }]} onPress={handleArrivedAtPickup}>
+            {rideStatus === 'accepted' && (
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginBottom: 12 }]}
+                onPress={handleArrivedAtPickup}
+                disabled={isUpdating}
+              >
                 <LinearGradient colors={['#4A90E2', '#357ABD']} style={styles.buttonGradient}>
-                  <Text style={styles.primaryButtonText}>Arrived at Pickup</Text>
-                  <Ionicons name="location" size={20} color="#fff" />
+                  <Text style={styles.primaryButtonText}>
+                    {isUpdating ? 'Updating...' : 'Arrived at Pickup'}
+                  </Text>
+                  {!isUpdating && <Ionicons name="location" size={20} color="#fff" />}
                 </LinearGradient>
               </TouchableOpacity>
+            )}
 
-              <TouchableOpacity style={styles.primaryButton} onPress={handleStartRide}>
+            {rideStatus === 'arrived' && (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleStartRide}
+                disabled={isUpdating}
+              >
                 <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.buttonGradient}>
-                  <Text style={styles.primaryButtonText}>Start Ride</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#000" />
+                  <Text style={styles.primaryButtonText}>
+                    {isUpdating ? 'Starting...' : 'Start Ride'}
+                  </Text>
+                  {!isUpdating && <Ionicons name="arrow-forward" size={20} color="#000" />}
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
 
-          {rideStatus === 'started' && (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleArrivedAtDropoff}>
-              <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.buttonGradient}>
-                <Text style={styles.primaryButtonText}>Arrived at Destination</Text>
-                <Ionicons name="checkmark" size={20} color="#000" />
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
+            {rideStatus === 'started' && (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleArrivedAtDropoff}
+                disabled={isUpdating}
+              >
+                <LinearGradient colors={[COLORS.primary, '#FFD700']} style={styles.buttonGradient}>
+                  <Text style={styles.primaryButtonText}>Arrived at Destination</Text>
+                  <Ionicons name="checkmark" size={20} color="#000" />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
-          {rideStatus === 'arriving' && (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleCompleteRide}>
-              <LinearGradient colors={['#4CAF50', '#66BB6A']} style={styles.buttonGradient}>
-                <Text style={styles.primaryButtonText}>Complete Ride</Text>
-                <Ionicons name="checkmark-done" size={20} color="#000" />
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
+            {rideStatus === 'arriving' && (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleCompleteRide}
+                disabled={isUpdating}
+              >
+                <LinearGradient colors={['#4CAF50', '#66BB6A']} style={styles.buttonGradient}>
+                  <Text style={styles.primaryButtonText}>
+                    {isUpdating ? 'Completing...' : 'Complete Ride'}
+                  </Text>
+                  {!isUpdating && <Ionicons name="checkmark-done" size={20} color="#000" />}
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
-          {rideStatus !== 'completed' && (
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRide}>
-              <Text style={styles.cancelButtonText}>Cancel Ride</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+            {/* Cancel Ride only available before starting the ride */}
+            {['accepted', 'arrived'].includes(rideStatus) && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancelRide}
+                disabled={isUpdating}
+              >
+                <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
       </LinearGradient>
     </View>
   );

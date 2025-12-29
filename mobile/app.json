@@ -25,7 +25,8 @@
       "bundleIdentifier": "com.prepedo.nepal",
       "buildNumber": "1.0.0",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to your camera for profile and document uploads."
+        "NSCameraUsageDescription": "This app needs access to your camera for profile and document uploads.",
+        "NSLocationWhenInUseUsageDescription": "Prepedo Nepal needs your location to set pickup points and track your ride."
       }
     },
     "android": {
@@ -38,7 +39,10 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
