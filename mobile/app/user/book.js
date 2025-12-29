@@ -59,7 +59,23 @@ export default function BookRideScreen() {
   const getCurrentLocation = async () => {
     try {
       setIsLoading(true);
-      let location = await Location.getCurrentPositionAsync({});
+
+      // Try to get cached location first for speed
+      const lastLoc = await Location.getLastKnownPositionAsync({});
+      if (lastLoc) {
+        setPickup(prev => ({
+          ...prev,
+          latitude: lastLoc.coords.latitude,
+          longitude: lastLoc.coords.longitude
+        }));
+      }
+
+      // Fresh location with balanced accuracy to avoid hangs
+      let location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        maxAge: 10000
+      });
+
       const coords = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
@@ -78,13 +94,15 @@ export default function BookRideScreen() {
       });
     } catch (error) {
       console.error('Error getting location:', error);
-      // Fallback to Kathmandu if location fetching fails
-      const ktmCoords = { latitude: 27.7172, longitude: 85.3240 };
-      setPickup(prev => ({
-        ...prev,
-        ...ktmCoords,
-        address: prev.address || 'Kathmandu, Nepal'
-      }));
+      // Fallback to Kathmandu if location fetching fails and no last known
+      if (!pickup.latitude) {
+        const ktmCoords = { latitude: 27.7172, longitude: 85.3240 };
+        setPickup(prev => ({
+          ...prev,
+          ...ktmCoords,
+          address: prev.address || 'Kathmandu, Nepal'
+        }));
+      }
     } finally {
       setIsLoading(false);
     }

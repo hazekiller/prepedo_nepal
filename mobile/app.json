@@ -53,7 +53,14 @@
       "expo-font",
       "expo-splash-screen",
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Allow Prepedo Nepal to use your location even when the app is in background to track your ride.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "owner": "sunabbaskota",
     "extra": {

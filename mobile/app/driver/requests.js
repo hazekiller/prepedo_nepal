@@ -30,7 +30,20 @@ export default function RequestsScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        let location = await Location.getCurrentPositionAsync({});
+        // Get last known for instant UI update
+        const lastLoc = await Location.getLastKnownPositionAsync({});
+        if (lastLoc) {
+          setDriverLocation({
+            latitude: lastLoc.coords.latitude,
+            longitude: lastLoc.coords.longitude,
+          });
+        }
+
+        // Get fresh location with balanced accuracy to avoid GPS hang
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          maxAge: 10000
+        });
         setDriverLocation({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -47,75 +60,80 @@ export default function RequestsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Refresh list when screen comes into focus
       fetchAvailableBookings();
-    }, [])
+    }, [token]) // Only re-run if token changes
   );
 
   useEffect(() => {
-    fetchAvailableBookings();
+    // Initial fetch handled by FocusEffect
 
     // Listen for new bookings
     if (connected && socketService.socket) {
       console.log('📡 Socket connected in RequestsScreen, setting up listeners...');
 
-      socketService.socket.on('booking:new', (newBooking) => {
+      const handleNewBooking = (newBooking) => {
         if (!newBooking || !newBooking.id) return;
         console.log('🔔 New booking received:', newBooking.id);
         setRequests(prev => {
-          // Prevent duplicates
           if (prev.some(r => r.id === newBooking.id)) return prev;
           const newList = [newBooking, ...prev];
-          if (!selectedRide) setSelectedRide(newBooking);
           return newList;
         });
-      });
+      };
 
-      socketService.socket.on('booking:taken', (data) => {
+      const handleBookingTaken = (data) => {
         console.log('🚫 Booking taken by another driver:', data.bookingId);
         setRequests(prev => {
           const newList = prev.filter(r => r.id !== data.bookingId);
-          if (selectedRide?.id === data.bookingId) {
-            setSelectedRide(newList.length > 0 ? newList[0] : null);
-          }
+          // If the taken ride was selected, select the first available one instead
+          setSelectedRide(current => {
+            if (current?.id === data.bookingId) {
+              return newList.length > 0 ? newList[0] : null;
+            }
+            return current;
+          });
           return newList;
         });
-      });
+      };
 
-      socketService.socket.on('booking:assigned', (booking) => {
+      const handleAssigned = (booking) => {
         console.log('🚖 You have been assigned to booking:', booking.id);
         Alert.alert('Success', 'You have been selected for this ride!', [
           { text: 'View Ride', onPress: () => router.push(`/driver/active-ride?rideId=${booking.id}`) }
         ]);
-      });
-    }
+      };
 
-    // Periodically update driver location on server while waiting
-    let locationUpdateInterval = null;
-    if (connected && socketService.socket) {
-      locationUpdateInterval = setInterval(async () => {
+      socketService.socket.on('booking:new', handleNewBooking);
+      socketService.socket.on('booking:taken', handleBookingTaken);
+      socketService.socket.on('booking:assigned', handleAssigned);
+
+      // Periodically update driver location on server
+      const locationUpdateInterval = setInterval(async () => {
         try {
-          const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            maxAge: 15000
+          });
           const newLoc = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
           };
           setDriverLocation(newLoc);
           socketService.socket.emit('driver:updateLocation', newLoc);
         } catch (error) {
           console.warn('Failed to update driver location:', error);
         }
-      }, 15000); // Every 15 seconds
-    }
+      }, 15000);
 
-    return () => {
-      if (socketService.socket) {
-        socketService.socket.off('booking:new');
-        socketService.socket.off('booking:taken');
-        socketService.socket.off('booking:assigned');
-      }
-      if (locationUpdateInterval) clearInterval(locationUpdateInterval);
-    };
-  }, [connected, selectedRide]);
+      return () => {
+        socketService.socket.off('booking:new', handleNewBooking);
+        socketService.socket.off('booking:taken', handleBookingTaken);
+        socketService.socket.off('booking:assigned', handleAssigned);
+        clearInterval(locationUpdateInterval);
+      };
+    }
+  }, [connected]); // Remove selectedRide as dependency to prevent churn
 
   const fetchAvailableBookings = async () => {
     try {

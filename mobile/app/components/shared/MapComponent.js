@@ -1,72 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Platform, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { COLORS } from '../../config/colors';
-import { Ionicons } from '@expo/vector-icons';
 
 const MapComponent = ({
     latitude,
     longitude,
-    pickup, // { latitude, longitude } (Static Marker)
-    dropoff, // { latitude, longitude } (Static Marker)
-    driver, // { latitude, longitude } (Moving Marker)
-    origin, // { latitude, longitude } (Internal routing origin)
-    destination, // { latitude, longitude } (Internal routing destination)
+    pickup,
+    dropoff,
+    driver,
+    origin,
+    destination,
     zoom = 13,
     height = 300,
     onLocationSelect,
-    onRouteInfo, // Callback for { distance, duration }
+    onRouteInfo,
     selectable = false,
-    showUserLocation = false,
-    selectionType = 'pickup' // 'pickup' or 'dropoff'
+    selectionType = 'pickup'
 }) => {
-    const mapRef = useRef(null);
+    const webViewRef = useRef(null);
+    const [isLoaded, setIsLoaded] = useState(false);
     const [routeCoords, setRouteCoords] = useState([]);
-    const [isLoadingRoute, setIsLoadingRoute] = useState(false);
 
-    const [region, setRegion] = useState({
-        latitude: latitude || pickup?.latitude || 27.7172,
-        longitude: longitude || pickup?.longitude || 85.3240,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-    });
+    // Initial region
+    const initialLat = latitude || pickup?.latitude || origin?.latitude || 27.7172;
+    const initialLng = longitude || pickup?.longitude || origin?.longitude || 85.3240;
 
+    // Fetch route via OSRM
     useEffect(() => {
-        if (latitude && longitude) {
-            setRegion(prev => ({
-                ...prev,
-                latitude,
-                longitude
-            }));
-        }
-    }, [latitude, longitude]);
+        const fetchRoute = async () => {
+            // Use origin/destination if provided, else fallback to pickup/dropoff
+            const start = origin || pickup;
+            const end = destination || dropoff;
 
+            if (start?.latitude && end?.latitude) {
+                try {
+                    const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+                    const response = await fetch(url);
+                    const data = await response.json();
 
-    const fitAllPoints = () => {
-        if (!mapRef.current || Platform.OS === 'web') return;
+                    if (data.code === 'Ok' && data.routes?.length > 0) {
+                        const route = data.routes[0];
+                        const coords = route.geometry.coordinates.map(c => ({
+                            latitude: c[1],
+                            longitude: c[0]
+                        }));
 
-        const points = [];
-        if (pickup?.latitude) points.push(pickup);
-        if (dropoff?.latitude) points.push(dropoff);
-        if (driver?.latitude) points.push(driver);
+                        setRouteCoords(coords);
 
-        if (points.length > 1) {
-            mapRef.current.fitToCoordinates(points, {
-                edgePadding: { top: 80, right: 80, bottom: 80, left: 80 },
-                animated: true,
-            });
-        }
-    };
+                        if (onRouteInfo) {
+                            onRouteInfo({
+                                distance: route.distance / 1000,
+                                duration: route.duration / 60,
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching route:', error);
+                }
+            } else {
+                setRouteCoords([]);
+            }
+        };
 
-    // Fetch route when points change
-    useEffect(() => {
-        const start = origin?.latitude ? origin : pickup;
-        const end = destination?.latitude ? destination : dropoff;
-
-        if (start?.latitude && end?.latitude) {
-            fetchRoute(start, end);
-        } else {
-            setRouteCoords([]);
-        }
+        fetchRoute();
     }, [
         origin?.latitude, origin?.longitude,
         destination?.latitude, destination?.longitude,
@@ -74,204 +71,151 @@ const MapComponent = ({
         dropoff?.latitude, dropoff?.longitude
     ]);
 
-    const fetchRoute = async (start, end) => {
-        try {
-            setIsLoadingRoute(true);
-            const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+    const htmlContent = useMemo(() => `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                body { margin: 0; padding: 0; background: #1a1a1a; }
+                #map { height: 100vh; width: 100vw; }
+                .leaflet-container { background: #1a1a1a; }
+                .leaflet-tile { filter: invert(100%) hue-rotate(180deg) brightness(0.6) contrast(0.9); }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${initialLat}, ${initialLng}], ${zoom});
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-            const response = await fetch(url);
-            const data = await response.json();
+                var markers = {};
+                var routeLayer;
 
-            if (data.code === 'Ok' && data.routes?.length > 0) {
-                const route = data.routes[0];
-                const coords = route.geometry.coordinates.map(c => ({
-                    latitude: c[1],
-                    longitude: c[0]
-                }));
+                function updateMap(data) {
+                    if (markers.pickup) map.removeLayer(markers.pickup);
+                    if (markers.dropoff) map.removeLayer(markers.dropoff);
+                    if (markers.driver) map.removeLayer(markers.driver);
+                    if (routeLayer) map.removeLayer(routeLayer);
 
-                setRouteCoords(coords);
+                    var points = [];
 
-                if (onRouteInfo) {
-                    onRouteInfo({
-                        distance: route.distance / 1000,
-                        duration: route.duration / 60,
+                    if (data.pickup && data.pickup.latitude) {
+                        markers.pickup = L.marker([data.pickup.latitude, data.pickup.longitude], {
+                            icon: L.divIcon({
+                                html: '<div style="background:${COLORS.primary};width:12px;height:12px;border-radius:6px;border:2px solid white;box-shadow:0 0 10px ${COLORS.primary}"></div>',
+                                iconSize: [12, 12]
+                            })
+                        }).addTo(map);
+                        points.push([data.pickup.latitude, data.pickup.longitude]);
+                    }
+
+                    if (data.dropoff && data.dropoff.latitude) {
+                        markers.dropoff = L.marker([data.dropoff.latitude, data.dropoff.longitude], {
+                            icon: L.divIcon({
+                                html: '<div style="background:#FF4B4B;width:12px;height:12px;border-radius:6px;border:2px solid white;box-shadow:0 0 10px #FF4B4B"></div>',
+                                iconSize: [12, 12]
+                            })
+                        }).addTo(map);
+                        points.push([data.dropoff.latitude, data.dropoff.longitude]);
+                    }
+
+                    if (data.driver && data.driver.latitude) {
+                        markers.driver = L.marker([data.driver.latitude, data.driver.longitude], {
+                            icon: L.divIcon({
+                                html: '<div style="font-size:24px;filter:drop-shadow(0 0 5px ${COLORS.primary})">🚗</div>',
+                                iconSize: [24, 24],
+                                iconAnchor: [12, 12]
+                            })
+                        }).addTo(map);
+                        points.push([data.driver.latitude, data.driver.longitude]);
+                    }
+
+                    if (data.route && data.route.length > 0) {
+                        routeLayer = L.polyline(data.route.map(c => [c.latitude, c.longitude]), {
+                            color: '${COLORS.primary}',
+                            weight: 5,
+                            opacity: 0.8,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        }).addTo(map);
+                        if (!${selectable}) map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+                    } else if (points.length > 1 && !${selectable}) {
+                        map.fitBounds(points, { padding: [50, 50] });
+                    }
+                }
+
+                if (${selectable}) {
+                    map.on('moveend', function() {
+                        var center = map.getCenter();
+                        window.ReactNativeWebView.postMessage(JSON.stringify({
+                            type: 'onLocationSelect',
+                            latitude: center.lat,
+                            longitude: center.lng
+                        }));
                     });
                 }
 
-                setTimeout(fitAllPoints, 200);
-            }
-        } catch (error) {
-            console.error('Error fetching route:', error);
-        } finally {
-            setIsLoadingRoute(false);
-        }
-    };
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'onLoaded' }));
+            </script>
+        </body>
+        </html>
+    `, [COLORS.primary, selectable]);
 
-    // Auto-fit when driver moves (occasionally)
     useEffect(() => {
-        if (driver?.latitude && !selectable) {
-            fitAllPoints();
+        if (isLoaded && webViewRef.current) {
+            const data = { pickup, dropoff, driver, route: routeCoords };
+            webViewRef.current.injectJavaScript(`updateMap(${JSON.stringify(data)}); true;`);
         }
-    }, [driver?.latitude, driver?.longitude]);
+    }, [pickup, dropoff, driver, routeCoords, isLoaded]);
 
-    if (Platform.OS === 'web') {
-        const lat = region.latitude;
-        const lng = region.longitude;
-        const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01}%2C${lat - 0.01}%2C${lng + 0.01}%2C${lat + 0.01}&layer=mapnik&marker=${lat}%2C${lng}`;
+    useEffect(() => {
+        if (isLoaded && webViewRef.current && (latitude || longitude)) {
+            webViewRef.current.injectJavaScript(`map.setView([${latitude}, ${longitude}]); true;`);
+        }
+    }, [latitude, longitude, isLoaded]);
 
-        return (
-            <View style={[styles.container, { height }]}>
-                <iframe
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    scrolling="no"
-                    marginHeight="0"
-                    marginWidth="0"
-                    src={mapUrl}
-                    style={{ border: 'none', borderRadius: 12 }}
-                />
-            </View>
-        );
-    }
-
-    // Native (iOS/Android)
-    try {
-        const MapView = require('react-native-maps').default;
-        const { Marker, Polyline } = require('react-native-maps');
-
-        return (
-            <View style={[styles.container, { height }]}>
-                <MapView
-                    ref={mapRef}
-                    style={{ flex: 1 }}
-                    region={region}
-                    showsUserLocation={showUserLocation}
-                    onRegionChangeComplete={(newRegion) => {
-                        if (selectable) {
-                            setRegion(newRegion);
-                            if (onLocationSelect) {
-                                onLocationSelect({
-                                    latitude: newRegion.latitude,
-                                    longitude: newRegion.longitude
-                                });
-                            }
-                        }
-                    }}
-                >
-                    {/* Only show central marker icon if selectable, otherwise show markers */}
-                    {!selectable && !pickup && !dropoff && (
-                        <Marker
-                            coordinate={{
-                                latitude: region.latitude,
-                                longitude: region.longitude
-                            }}
-                            pinColor={COLORS.primary}
-                        />
-                    )}
-
-                    {pickup?.latitude && (
-                        <Marker coordinate={pickup} title="Pickup">
-                            <View style={styles.markerContainer}>
-                                <Ionicons name="location" size={30} color={COLORS.primary} />
-                            </View>
-                        </Marker>
-                    )}
-
-                    {dropoff?.latitude && (
-                        <Marker coordinate={dropoff} title="Drop-off">
-                            <View style={styles.markerContainer}>
-                                <Ionicons name="flag" size={30} color="#FF4B4B" />
-                            </View>
-                        </Marker>
-                    )}
-
-                    {driver?.latitude && (
-                        <Marker coordinate={driver} title="Driver">
-                            <View style={styles.markerContainer}>
-                                <Ionicons name="car-sport" size={32} color={COLORS.primary} />
-                            </View>
-                        </Marker>
-                    )}
-
-                    {routeCoords.length > 0 && (
-                        <Polyline
-                            coordinates={routeCoords}
-                            strokeWidth={4}
-                            strokeColor={COLORS.primary}
-                        />
-                    )}
-                </MapView>
-
-                {selectable && (
-                    <View style={styles.centerMarkerContainer} pointerEvents="none">
-                        <Ionicons
-                            name={selectionType === 'dropoff' ? "flag" : "location"}
-                            size={40}
-                            color={selectionType === 'dropoff' ? "#FF4B4B" : COLORS.primary}
-                        />
-                    </View>
-                )}
-
-                {isLoadingRoute && (
-                    <View style={styles.loader}>
-                        <ActivityIndicator color={COLORS.primary} />
-                    </View>
-                )}
-            </View>
-        );
-    } catch (e) {
-        console.warn('react-native-maps not found:', e);
-        return (
-            <View style={[styles.container, styles.placeholder, { height }]}>
-                <Text style={styles.placeholderText}>Map Error</Text>
-                <Text style={styles.coordinates}>{region.latitude.toFixed(4)}, {region.longitude.toFixed(4)}</Text>
-            </View>
-        );
-    }
+    return (
+        <View style={[styles.container, { height }]}>
+            <WebView
+                ref={webViewRef}
+                style={styles.webview}
+                source={{ html: htmlContent }}
+                onMessage={(e) => {
+                    try {
+                        const data = JSON.parse(e.nativeEvent.data);
+                        if (data.type === 'onLoaded') setIsLoaded(true);
+                        if (data.type === 'onLocationSelect' && onLocationSelect) onLocationSelect(data);
+                    } catch (err) { }
+                }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                scrollEnabled={false}
+                originWhitelist={['*']}
+            />
+            {selectable && (
+                <View style={[styles.centerMarker, { top: height / 2 - 40 }]} pointerEvents="none">
+                    <Text style={{ fontSize: 40, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 4 }}>
+                        {selectionType === 'dropoff' ? '🏁' : '📍'}
+                    </Text>
+                </View>
+            )}
+            {!isLoaded && (
+                <View style={styles.loader}>
+                    <ActivityIndicator color={COLORS.primary} size="large" />
+                </View>
+            )}
+        </View>
+    );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        overflow: 'hidden',
-        borderRadius: 12,
-        backgroundColor: '#1a1a1a',
-        position: 'relative'
-    },
-    centerMarkerContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        marginTop: -40,
-        marginLeft: -20,
-        zIndex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    markerContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    placeholder: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    placeholderText: {
-        fontWeight: 'bold',
-        color: '#666',
-    },
-    coordinates: {
-        fontSize: 12,
-        color: '#888',
-    },
-    loader: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        padding: 8,
-        borderRadius: 20,
-    }
+    container: { overflow: 'hidden', borderRadius: 20, backgroundColor: '#1a1a1a', position: 'relative', borderWidth: 1, borderColor: '#333' },
+    webview: { flex: 1, backgroundColor: 'transparent' },
+    centerMarker: { position: 'absolute', left: '50%', marginLeft: -20, zIndex: 10 },
+    loader: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', zIndex: 20 }
 });
 
 export default MapComponent;
