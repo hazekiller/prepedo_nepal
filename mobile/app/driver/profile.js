@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, Image, StyleSheet, TouchableOpacity, Alert, ScrollView } from "react-native";
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

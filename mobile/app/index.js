@@ -6,36 +6,40 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
-import COLORS  from './config/colors';
+import COLORS from './config/colors';
 import authService from './services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function IndexScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const { currentMode } = useSelector((state) => state.mode);
-  const { user } = useSelector((state) => state.user);
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     checkAuthAndRedirect();
-  }, []);
+  }, [user]);
 
   const checkAuthAndRedirect = async () => {
     try {
-      // Check if user is authenticated
-      const isAuthenticated = await authService.isAuthenticated();
+      // Check if user is authenticated from storage or state
+      const token = await AsyncStorage.getItem('token');
 
-      if (!isAuthenticated) {
-        // Not authenticated, go to login
+      if (!token && !user) {
         router.replace('/login');
         return;
       }
 
-      // User is authenticated, redirect based on mode
-      if (currentMode === 'driver') {
-        router.replace('/(driver)/dashboard');
+      // If we have a user role, use it to verify mode
+      const role = user?.role || (await AsyncStorage.getItem('user').then(u => u ? JSON.parse(u).role : null));
+
+      if (currentMode === 'driver' || role === 'driver') {
+        router.replace('/driver/dashboard');
+      } else if (role === 'admin') {
+        router.replace('/admin-dashboard');
       } else {
-        router.replace('/(user)/home');
+        router.replace('/user/home');
       }
     } catch (error) {
       console.error('Auth check failed:', error);

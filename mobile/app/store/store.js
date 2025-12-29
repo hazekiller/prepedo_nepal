@@ -28,7 +28,7 @@ const persistConfig = {
   key: "root",
   version: 3, // Incremented version for new structure
   storage: AsyncStorage,
-  whitelist: ["user", "splash", "bookings", "mode"], // Persist user, splash, bookings, and mode
+  whitelist: ["user", "auth", "splash", "bookings", "mode"], // Persist user, auth, splash, bookings, and mode
   blacklist: ["vehicles"], // Don't persist vehicles (fetch fresh)
 };
 

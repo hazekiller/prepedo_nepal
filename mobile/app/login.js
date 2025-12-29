@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import COLORS from './config/colors';
 import { loginUser } from './store/slices/authSlice';
+import { switchMode } from './store/slices/modeSlice';
 import socketService from './services/socketService';
 
 export default function LoginScreen() {
@@ -54,10 +55,12 @@ export default function LoginScreen() {
           router.replace('/admin-dashboard');
           break;
         case 'driver':
-          router.replace('/driver');
+          dispatch(switchMode('driver'));
+          router.replace('/driver/dashboard');
           break;
         default:
-          router.replace('/user');
+          dispatch(switchMode('user'));
+          router.replace('/user/home');
       }
     } catch (error) {
       console.error('❌ Login error:', error);
