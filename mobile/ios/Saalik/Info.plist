@@ -49,6 +49,12 @@
     <string>This app needs access to your camera for profile and document uploads.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Allow Prepedo Nepal to use your location even when the app is in background to track your ride.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Prepedo Nepal needs your location to set pickup points and track your ride.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSUserActivityTypes</key>

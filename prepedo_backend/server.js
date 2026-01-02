@@ -20,6 +20,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : [
     'https://prepedo.com',
     'http://localhost:8081',
+    'http://localhost:5173',
     'http://192.168.1.68:8081',
     'http://localhost:19006',
     'exp://192.168.1.68:19000',
@@ -94,6 +95,7 @@ app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/ratings', require('./routes/ratingRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/admin', require('./routes/settingsRoutes')); // Settings Routes sharing /api/admin prefix
 
 // Global routes
 const bookingController = require('./controllers/bookingController');

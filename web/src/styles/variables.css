@@ -1,0 +1,63 @@
+:root {
+  /* Primary Colors */
+  --primary: #D4AF37;
+  --primary-light: #E8C966;
+  --primary-dark: #C9A955;
+
+  /* Background Colors */
+  --background: #000000;
+  --background-secondary: #1A1A1A;
+  --card-background: #1A1A1A;
+
+  /* Text Colors */
+  --text: #FFFFFF;
+  --text-secondary: #9E9E9E;
+  --text-light: #CCCCCC;
+  --text-muted: #666666;
+
+  /* Status Colors */
+  --success: #50C878;
+  --error: #FF6B6B;
+  --warning: #FFA500;
+  --info: #4A90E2;
+
+  /* UI Colors */
+  --border: #2A2A2A;
+  --divider: #2A2A2A;
+  --shadow: #000000;
+
+  /* Gradients */
+  --gradient-start: #D4AF37;
+  --gradient-end: #C9A955;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(26, 26, 26, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+  color: #000;
+  font-weight: 700;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}

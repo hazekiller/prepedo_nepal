@@ -1,53 +1,64 @@
 const { promisePool } = require('../config/database');
 
 // Helper function to calculate fare based on Haversine distance
-const calculateFare = (distance, vehicleType) => {
-  let baseFare, perKmFare;
-  const bookingFee = 30; // Premium service booking fee
+const calculateFare = async (distance, vehicleType) => {
+  // Query DB for settings
+  const [settingsRows] = await promisePool.query('SELECT setting_key, setting_value FROM system_settings');
+  const settings = {};
+  settingsRows.forEach(row => settings[row.setting_key] = row.setting_value);
 
-  // KTM Valley specific base rates (Premium Service)
+  // Defaults if DB empty
+  const defaults = {
+    base_fare_bike: 60, per_km_fare_bike: 18,
+    base_fare_car: 150, per_km_fare_car: 35,
+    base_fare_taxi: 200, per_km_fare_taxi: 45,
+    booking_fee: 30,
+    surge_multiplier_morning: 1.35,
+    surge_multiplier_evening: 1.5,
+    surge_multiplier_night: 1.4
+  };
+
+  const getSetting = (key) => settings[key] ? parseFloat(settings[key]) : defaults[key];
+
+  let baseFare, perKmFare;
+  const bookingFee = getSetting('booking_fee'); // Fixed for now, can be added to settings later if needed
+
   switch (vehicleType) {
     case 'bike':
-      baseFare = parseFloat(process.env.BASE_FARE_BIKE) || 60;
-      perKmFare = parseFloat(process.env.PER_KM_FARE_BIKE) || 18;
+      baseFare = getSetting('base_fare_bike');
+      perKmFare = getSetting('per_km_fare_bike');
       break;
     case 'car':
-      baseFare = parseFloat(process.env.BASE_FARE_CAR) || 150;
-      perKmFare = parseFloat(process.env.PER_KM_FARE_CAR) || 35;
+      baseFare = getSetting('base_fare_car');
+      perKmFare = getSetting('per_km_fare_car');
       break;
     case 'taxi':
-      baseFare = parseFloat(process.env.BASE_FARE_TAXI) || 200;
-      perKmFare = parseFloat(process.env.PER_KM_FARE_TAXI) || 45;
+      baseFare = getSetting('base_fare_taxi');
+      perKmFare = getSetting('per_km_fare_taxi');
       break;
     default:
       baseFare = 60;
       perKmFare = 18;
   }
 
-  // Calculate fare using distance (already calculated via Haversine)
+  // Calculate base total
   let totalFare = baseFare + (distance * perKmFare) + bookingFee;
 
-  // KTM Valley Surge Multiplier (Rush Hour & Night)
+  // Surge Logic
   const now = new Date();
   const hour = now.getHours();
   const day = now.getDay();
-
   let multiplier = 1.0;
 
-  // Morning Rush (8:00 AM - 10:30 AM)
   if (hour >= 8 && hour < 11) {
-    multiplier = 1.35;
-  }
-  // Evening Rush (4:30 PM - 8:00 PM)
-  else if (hour >= 16 && hour < 20) {
-    multiplier = 1.5;
-  }
-  // Late Night (10:00 PM - 5:00 AM)
-  else if (hour >= 22 || hour < 5) {
-    multiplier = 1.4;
+    multiplier = getSetting('surge_multiplier_morning');
+  } else if (hour >= 16 && hour < 20) {
+    multiplier = getSetting('surge_multiplier_evening');
+  } else if (hour >= 22 || hour < 5) {
+    multiplier = getSetting('surge_multiplier_night');
   }
 
-  // Saturday adjustment
+  // Saturday adjustment (hardcoded for now as logic, not value)
   if (day === 6) {
     multiplier *= 0.95;
   }
@@ -87,7 +98,7 @@ const createBooking = async (req, res) => {
     const bookingNumber = generateBookingNumber();
 
     // Calculate fare
-    const estimatedFare = calculateFare(distance, vehicle_type);
+    const estimatedFare = await calculateFare(distance, vehicle_type);
 
     // Insert booking
     const [result] = await promisePool.query(
